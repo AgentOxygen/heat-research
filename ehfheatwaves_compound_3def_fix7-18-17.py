@@ -1,7 +1,6 @@
 import warnings
 warnings.filterwarnings('ignore')
 import sys
-modulename = ''
 try:
     modulename = 'pandas'
     import pandas as pd
