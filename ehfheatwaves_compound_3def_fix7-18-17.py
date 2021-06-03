@@ -109,7 +109,7 @@ calendar = nctime.calendar
 if not calendar:
     print('Unrecognized calendar. Using gregorian.')
     calendar = 'gregorian'
-elif calendar == '360_day':
+elif calendar=='360_day':
     daysinyear = 360
     # 360 day season start and end indices
     SHS = (301,451)
@@ -121,7 +121,7 @@ elif calendar == '360_day':
     class calendar360():
         def __init__(self,sdate,edate):
             self.year = np.repeat(range(sdate.year,edate.year+1), 360, 0)
-            nyears = len(range(sdate.year,edate.year+1))
+            nyears = len(xrange(sdate.year,edate.year+1))
             self.month = np.tile(np.repeat(range(1,12+1), 30, 0), nyears)
             self.day = np.tile(np.tile(range(1,30+1), 12), nyears)
             if (sdate.day!=1)|(edate.month!=1):
@@ -256,7 +256,7 @@ elif qtilemethod=='matlab':
 elif qtilemethod=='climpact':
     percentile = qtiler.quantile_climpact
     parameter = False
-for day in range(daysinyear):
+for day in xrange(daysinyear):
     tpct[day,...] = percentile(tave_base[window,...], pcntl, parameter)
     if options.t90pc:
         txpct[day,...] = percentile(tmax[window,...], pcntl, parameter)
@@ -308,7 +308,7 @@ if (dayone.month!=1)|(dayone.day!=1):
 
 # Calculate EHF
 EHF = np.ones(tave.shape)*np.nan
-for i in range(32,tave.shape[0]):
+for i in xrange(32,tave.shape[0]):
     EHIaccl = tave[i-2:i+1,...].sum(axis=0)/3. - \
             tave[i-32:i-2,...].sum(axis=0)/30.
     EHIsig = tave[i-2:i+1,...].sum(axis=0)/3. - \
@@ -332,11 +332,11 @@ def identify_hw(ehfs):
     evente = events.copy()
     breake = breaks.copy()
     #event and break durations on first day of each:
-    for i in range(ehfs.shape[0]-2,-1,-1):
+    for i in xrange(ehfs.shape[0]-2,-1,-1):
          events[i,events[i,...]>0] = events[i+1,events[i,...]>0]+1 
          breaks[i,breaks[i,...]>0] = breaks[i+1,breaks[i,...]>0]+1
     #event and break durations on last day of each:
-    for i in range(1,ehfs.shape[0],1):
+    for i in xrange(1,ehfs.shape[0],1):
         #evente[i,evente[i,...]>0] = evente[i-1,evente[i,...]>0]+1 #event duration on last day of event
         breake[i,breake[i,...]>0] = breake[i-1,breake[i,...]>0]+1 #break duration on last day of break
     #Identify when heatwaves and breaks start and end with duration
@@ -369,7 +369,7 @@ def identify_hw(ehfs):
     lasttime=ehfs.shape[0]-1
     breakbefore = np.roll(endbe,1, axis=0)
     breakafter=np.zeros(ehfs.shape).astype(np.int)
-    for i in range(0,lasttime,1):
+    for i in xrange(0,lasttime,1):
         xy=endes[i,...]>0 #only evaluate for first days of events
         eduration=endes[i,xy]
         bsi=i+eduration
@@ -387,7 +387,7 @@ def identify_hw(ehfs):
     chw = np.append(chw,np.expand_dims(np.zeros(ehfs[0,...].shape),axis=0),0) #Append additional day
     endlength=chw.copy()
     size = ehfs.shape[0]
-    for i in range(lasttime,-1,-1):
+    for i in xrange(lasttime,-1,-1):
         xy=np.logical_and(chw[i,...]>0,breakafter[i,...]<=bmax) #only evaluation for first days of events part of compound events, where the break after is less than max break length
         eduration=endes[i,xy]    
         bafter=breakafter[i,xy]
@@ -406,7 +406,7 @@ def identify_hw(ehfs):
     ahw[chwhw]=chw[chwhw] #ensures don't double count hw that are summed into chw already
     del chwhw
     #Turn compound events that are not at beginning of event to zero for chw and ahw
-    for i in range(0,lasttime,1):
+    for i in xrange(0,lasttime,1):
         for index, j in np.ndenumerate(chw[i,...]):
                 if chw[i,index[0]]>0: #add ,index[1] after  index[0] if 3-D array
                     length=int(endlength[i,index[0]]) #add ,index[1] after  index[0] if 3-D array
@@ -424,7 +424,7 @@ def identify_hw(ehfs):
 if options.t90pc:
     txexceed = np.ones(tmax.shape)*np.nan
     tnexceed = txexceed.copy()
-    for i in range(0,tmax.shape[0]):
+    for i in xrange(0,tmax.shape[0]):
         idoy = i-daysinyear*int((i+1)/daysinyear)
         txexceed[i,...] = tmax[i,...]>txpct[idoy,...]
         tnexceed[i,...] = tmin[i,...]>tnpct[idoy,...]
@@ -468,7 +468,7 @@ def hw_aspects(EHF, season, hemisphere):
     AHW2F = HWN.copy()
     AHW2D = HWN.copy()
     # Loop over years
-    for iyear, year in enumerate(range(first_year,daylast.year)):
+    for iyear, year in enumerate(xrange(first_year,daylast.year)):
         if (year==daylast.year): continue # Incomplete yr
         # Select this years season
         allowance = 0 # For including heatwave days after the end of the season
@@ -480,17 +480,17 @@ def hw_aspects(EHF, season, hemisphere):
         EHF_i = EHF_i[0:,...]
         hw_i = hw_i[0:]  #hw_i = hw_i[0:-allowance]
         chw_i = chw_i[0:] #hw_i = hw_i[0:-allowance]
-        ahw_i = ahw_i[0:] #hw_i = hw_i[0:-allowance]
+	ahw_i = ahw_i[0:] #hw_i = hw_i[0:-allowance]
         ahw1_i = ahw1_i[0:] #hw_i = hw_i[0:-allowance]
         ahw2_i = ahw2_i[0:] #hw_i = hw_i[0:-allowance]
         # Calculate metrics
         HWN[iyear,...] = (hw_i>0).sum(axis=0)
         HWF[iyear,...] = hw_i.sum(axis=0)
         HWD[iyear,...] = hw_i.max(axis=0)
-        CHWN[iyear,...] = (chw_i>0).sum(axis=0)
+	CHWN[iyear,...] = (chw_i>0).sum(axis=0)
         CHWF[iyear,...] = chw_i.sum(axis=0)
         CHWD[iyear,...] = chw_i.max(axis=0)
-        AHWN[iyear,...] = (ahw_i>0).sum(axis=0)
+	AHWN[iyear,...] = (ahw_i>0).sum(axis=0)
         AHWF[iyear,...] = ahw_i.sum(axis=0)
         AHWD[iyear,...] = ahw_i.max(axis=0)
         AHW1N[iyear,...] = (ahw1_i>0).sum(axis=0)
@@ -537,16 +537,16 @@ def split_hemispheres(EHF):
         HWF = np.append(HWF_s, HWF_n, axis=1)
         HWD = np.append(HWD_s, HWD_n, axis=1)
         CHWN = np.append(CHWN_s, CHWN_n, axis=1)
-    CHWF = np.append(CHWF_s, CHWF_n, axis=1)
-    CHWD = np.append(CHWD_s, CHWD_n, axis=1)
-    AHWN = np.append(AHWN_s, AHWN_n, axis=1)
-    AHWF = np.append(AHWF_s, AHWF_n, axis=1)
-    AHWD = np.append(AHWD_s, AHWD_n, axis=1)
-    AHW1N = np.append(AHW1N_s, AHW1N_n, axis=1)
-    AHW1F = np.append(AHW1F_s, AHW1F_n, axis=1)
-    AHW1D = np.append(AHW1D_s, AHW1D_n, axis=1)
-    AHW2F = np.append(AHW2F_s, AHW2F_n, axis=1)
-    AHW2D = np.append(AHW2D_s, AHW2D_n, axis=1)
+	CHWF = np.append(CHWF_s, CHWF_n, axis=1)
+	CHWD = np.append(CHWD_s, CHWD_n, axis=1)	
+	AHWN = np.append(AHWN_s, AHWN_n, axis=1)
+	AHWF = np.append(AHWF_s, AHWF_n, axis=1)
+	AHWD = np.append(AHWD_s, AHWD_n, axis=1)
+	AHW1N = np.append(AHW1N_s, AHW1N_n, axis=1)
+	AHW1F = np.append(AHW1F_s, AHW1F_n, axis=1)
+	AHW1D = np.append(AHW1D_s, AHW1D_n, axis=1)
+	AHW2F = np.append(AHW2F_s, AHW2F_n, axis=1)
+	AHW2D = np.append(AHW2D_s, AHW2D_n, axis=1)
     elif north:
         HWN = HWN_n
         HWF = HWF_n

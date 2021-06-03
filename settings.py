@@ -1,3 +1,4 @@
 # Contains necessary settings and paths for accessing data
 
-DATA_DIR="/projects/dgs/persad_research/heat_research/data/"
+DATA_DIR = "/projects/dgs/persad_research/heat_research/data/"
+RESAMPLED_YEARLY_AVG = "/projects/dgs/persad_research/heat_research/preprocessing/resampled_yearly_avg/"
