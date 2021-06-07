@@ -70,6 +70,8 @@ parser.add_option('--dailyonly', action="store_true", dest='dailyonly',
         help='output only daily values and suppress yearly output')
 parser.add_option('--t90pc', action="store_true", dest='t90pc',
                 help='Calculate tx90pc and tn90pc heatwaves')
+parser.add_option('--change_dir', dest='output_dir', metavar='STR', default="",
+                help='Change output directory.')
 (options, args) = parser.parse_args()
 if not options.tmaxfile or not options.tminfile:
     print ("Please specify tmax and tmin files.")
@@ -86,6 +88,7 @@ else:
     print(options.bp)
 # Percentile
 pcntl = options.pcntl
+output_dir = options.output_dir
 # climpact/python/matlab
 qtilemethod = options.qtilemethod
 # season (winter/summer)
@@ -311,7 +314,7 @@ except KeyError:
     space = (tmaxnc.dimensions['latitude'].__len__(),tmaxnc.dimensions['longitude'].__len__())
 
 def save_yearly(definition):
-    yearlyout = Dataset('threshold_%s_%spcntl.nc'%(options.bp,str(pcntl).rstrip('0').rstrip('.')),'w')
+    yearlyout = Dataset(output_dir + 'threshold_%s_%spcntl.nc'%(options.bp,str(pcntl).rstrip('0').rstrip('.')),'w')
     yearlyout.createDimension('time', len(range(first_year,
             daylast.year+1)))
     yearlyout.createDimension('lon', tmaxnc.dimensions[lonname].__len__())

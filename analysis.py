@@ -6,6 +6,7 @@ from os import listdir, remove
 import imageio
 from uuid import uuid4
 from multiprocessing import Process, Queue
+from subprocess import Popen, PIPE
 
 dataset_names = listdir(RESAMPLED_YEARLY_AVG)
 xaer_datasets = [name for name in dataset_names if 'XAER' in name]
@@ -116,107 +117,75 @@ def fig1_recreation(img_output_path: str, time_slice_begin=1920, time_slice_end=
     figure.savefig(img_output_path, bbox_inches='tight')
 
 
-# def avg_anomaly_map(img_output_path: str, time_slice_begin=1920, time_slice_end=2020, baseline_begin=1920,
-#                     baseline_end=1970):
-img_output_path = "output2.png"
-time_slice_begin = 1920
-time_slice_end = 2080
-baseline_begin = 1920
-baseline_end = 1970
-# hist_mean_temps = []
-# hist_temp_lists = []
-# for ds_name in trefht_hist_datasets:
-#     ds = xarray.open_dataset(RESAMPLED_YEARLY_AVG + ds_name)
-#     ds = ds.sel(year=slice(time_slice_begin, time_slice_end))
-#
-#     n_lat = ds.TREFHT.lat.size
-#     n_lon = ds.TREFHT.lon.size
-#     total_area = n_lat * n_lon
-#
-#     ds_avg = ds.TREFHT
-#     hist_temp_lists.append(ds_avg * 1)
-#     if len(hist_mean_temps) == 0:
-#         hist_mean_temps = ds_avg
-#     else:
-#         hist_mean_temps += ds_avg
-#
-# hist_mean_temps = hist_mean_temps / len(trefht_hist_datasets)
-# hist_baseline = np.mean(hist_mean_temps[0:baseline_end - baseline_begin])
-#
-# xghg_year_lists = []
-# xghg_temp_lists = []
-# xghg_avg_ds = trefht_xghg_datasets[0]*0
-# for ds_name in trefht_xghg_datasets:
-#     ds = xarray.open_dataset(RESAMPLED_YEARLY_AVG + ds_name)
-#     ds = ds.sel(year=slice(time_slice_begin, time_slice_end))
-#
-#     xghg_year_lists.append(ds.year.values)
-#     xghg_avg_ds += ds.TREFHT / len(trefht_xghg_datasets)
+def output_animated_yrly_trefht_based(spec_dataset_names: list, img_output_path: str, label: str,
+                                      time_slice_begin=1920, time_slice_end=2080,
+                                      baseline_begin=1920, baseline_end=1970,
+                                      color_bar_max=1, color_bar_min=-1) -> None:
+    years = xarray.open_dataset(RESAMPLED_YEARLY_AVG + spec_dataset_names[0]).sel(year=slice(time_slice_begin, time_slice_end)).year
+    temp_lists = []
+    avg_ds = xarray.open_dataset(RESAMPLED_YEARLY_AVG + spec_dataset_names[0]).sel(year=slice(time_slice_begin, time_slice_end)) * 0
+    print("Initialized.")
+    for ds_name in spec_dataset_names:
+        ds = xarray.open_dataset(RESAMPLED_YEARLY_AVG + ds_name)
+        ds = ds.sel(year=slice(time_slice_begin, time_slice_end))
+        print(ds_name)
+        years = ds.year.values
+        avg_ds["TREFHT"] += ds.TREFHT
+    avg_ds = avg_ds / len(spec_dataset_names)
+    baseline = avg_ds.TREFHT.sel(year=slice(baseline_begin, baseline_end))
+    baseline = baseline.sum(dim="year") / baseline.year.size
+    avg_ds["TREFHT"] -= baseline
+    print("Plotting...")
+    filenames = Queue()
 
-xghg_years = xarray.open_dataset(RESAMPLED_YEARLY_AVG + trefht_xghg_datasets[0]).sel(year=slice(time_slice_begin, time_slice_end)).year
-xghg_temp_lists = []
-xghg_avg_ds = xarray.open_dataset(RESAMPLED_YEARLY_AVG + trefht_xghg_datasets[0]).sel(year=slice(time_slice_begin, time_slice_end)) * 0
-print("Initialized.")
-for ds_name in trefht_xghg_datasets:
-    ds = xarray.open_dataset(RESAMPLED_YEARLY_AVG + ds_name)
-    ds = ds.sel(year=slice(time_slice_begin, time_slice_end))
-    print(ds_name)
-    years = ds.year.values
-    xghg_avg_ds["TREFHT"] += ds.TREFHT
-xghg_avg_ds = xghg_avg_ds / len(trefht_xghg_datasets)
-baseline = xghg_avg_ds.TREFHT.sel(year=slice(baseline_begin, baseline_end))
-baseline = baseline.sum(dim="year") / (baseline.year.size)
-xghg_avg_ds["TREFHT"] -= baseline
-print("Plotting...")
+    def output_frame(ds_, year_, filenames_queue):
+        print(year_)
+        plt.clf()
+        figure = plt.figure()
+        figure_axis = figure.add_subplot()
+        figure_axis.set_title(f'TREFHT Anomalies (Rel. 1920-1970) in {label}: {int(year_)}')
+        fig_map = figure_axis.pcolor(ds_.TREFHT.sel(year=year_), cmap='seismic', vmax=color_bar_max, vmin=color_bar_min)
+        figure.colorbar(fig_map, ax=figure_axis, format='%.0f')
+        # create file name and append it to a list
+        filename_ = f'{year_}-{uuid4()}.png'
+        filenames_queue.put(filename_)
 
-# The reason that the min/max of the XGHG doesnt match the plot (where it is briefly positive)
-# is because the baseline is calculated for each grid cell. For fig 1, its averaged over all of them
+        # save frame
+        figure.savefig(filename_)
+        print(f"Initializing process {year_}")
 
-filenames = Queue()
-def output_frame(ds, year, filenames_queue):
-    print(year)
-    plt.clf()
-    figure = plt.figure()
-    figure_axis = figure.add_subplot()
-    figure_axis.set_title(f'TREFHT Anomalies (Rel. 1920-1970) in XGHG: {year.values}')
-    fig_map = figure_axis.pcolor(ds.TREFHT.sel(year=year), cmap='PuOr', vmax=1, vmin=-1)
-    figure.colorbar(fig_map, ax=figure_axis, format='%.0f')
-    # create file name and append it to a list
-    filename = f'{year}-{uuid4()}.png'
-    filenames_queue.put(filename)
+    processes = []
+    for year in years:
+        proc = Process(target=output_frame, args=(avg_ds, year, filenames,))
+        proc.daemon = True
+        proc.start()
+        processes.append(proc)
 
-    # save frame
-    figure.savefig(filename)
-    print(f"Initializing process {year}")
+    for process in processes:
+        process.join()
+
+    filenames_list = []
+    while not filenames.empty():
+        name = filenames.get()
+        filenames_list.append(name)
+    filenames_list.sort()
+
+    images = []
+    for name in filenames_list:
+        images.append(imageio.imread(name))
+    kargs = {'duration': 0.3}
+    imageio.mimsave(img_output_path, images, **kargs)
+
+    # Remove files
+    for filename in set(filenames_list):
+        remove(filename)
 
 
-processes = []
-for year in xghg_years:
-    proc = Process(target=output_frame, args=(xghg_avg_ds, year, filenames,))
-    proc.daemon = True
-    proc.start()
-    processes.append(proc)
+def output_all_animated() -> None:
+    output_animated_yrly_trefht_based(trefht_xaer_datasets, "xaer-output.gif", "XAER", color_bar_max=3)
+    output_animated_yrly_trefht_based(trefht_xghg_datasets, "xghg-output.gif", "XGHG")
+    output_animated_yrly_trefht_based(trefht_hist_datasets, "all-output.gif", "ALL", color_bar_max=3)
 
-for process in processes:
-    process.join()
-
-# build gif
-filenames_list = []
-while not filenames.empty():
-    name = filenames.get()
-    filenames_list.append(name)
-filenames_list.sort()
-# with imageio.get_writer('output3.gif', mode='I') as writer:
-#     for name in filenames_list:
-#         image = imageio.imread(name)
-#         writer.append_data(image)
-
-images = []
-for name in filenames_list:
-    images.append(imageio.imread(name))
-kargs = { 'duration': 0.3 }
-imageio.mimsave("output3.gif", images, **kargs)
-
-# Remove files
-for filename in set(filenames_list):
-    remove(filename)
+process = Popen(['python3', 'ehfheatwaves_threshold.py', f'-x ../{max_ds_name}.nc', f'-n ../{min_ds_name}.nc',
+                 '--t90pc --base=1921-2050 -d CESM2 -p 90'], stdout=PIPE, stderr=PIPE)
+stdout, stderr = process.communicate()
