@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 from os import listdir, remove
 import imageio
 from uuid import uuid4
+from multiprocessing import Process, Queue
 
 dataset_names = listdir(RESAMPLED_YEARLY_AVG)
 xaer_datasets = [name for name in dataset_names if 'XAER' in name]
@@ -119,7 +120,7 @@ def fig1_recreation(img_output_path: str, time_slice_begin=1920, time_slice_end=
 #                     baseline_end=1970):
 img_output_path = "output2.png"
 time_slice_begin = 1920
-time_slice_end = 2020
+time_slice_end = 2080
 baseline_begin = 1920
 baseline_end = 1970
 # hist_mean_temps = []
@@ -152,35 +153,70 @@ baseline_end = 1970
 #     xghg_year_lists.append(ds.year.values)
 #     xghg_avg_ds += ds.TREFHT / len(trefht_xghg_datasets)
 
-xghg_years = trefht_xghg_datasets[0].year
+xghg_years = xarray.open_dataset(RESAMPLED_YEARLY_AVG + trefht_xghg_datasets[0]).sel(year=slice(time_slice_begin, time_slice_end)).year
 xghg_temp_lists = []
-xghg_avg_ds = trefht_xghg_datasets[0]*0
+xghg_avg_ds = xarray.open_dataset(RESAMPLED_YEARLY_AVG + trefht_xghg_datasets[0]).sel(year=slice(time_slice_begin, time_slice_end)) * 0
+print("Initialized.")
 for ds_name in trefht_xghg_datasets:
     ds = xarray.open_dataset(RESAMPLED_YEARLY_AVG + ds_name)
     ds = ds.sel(year=slice(time_slice_begin, time_slice_end))
-
+    print(ds_name)
     years = ds.year.values
-    xghg_avg_ds += ds.TREFHT / len(trefht_xghg_datasets)
+    xghg_avg_ds["TREFHT"] += ds.TREFHT
+xghg_avg_ds = xghg_avg_ds / len(trefht_xghg_datasets)
+baseline = xghg_avg_ds.TREFHT.sel(year=slice(baseline_begin, baseline_end))
+baseline = baseline.sum(dim="year") / (baseline.year.size)
+xghg_avg_ds["TREFHT"] -= baseline
+print("Plotting...")
 
-filenames = []
-for year in xghg_years:
+# The reason that the min/max of the XGHG doesnt match the plot (where it is briefly positive)
+# is because the baseline is calculated for each grid cell. For fig 1, its averaged over all of them
+
+filenames = Queue()
+def output_frame(ds, year, filenames_queue):
+    print(year)
     plt.clf()
     figure = plt.figure()
     figure_axis = figure.add_subplot()
-
+    figure_axis.set_title(f'TREFHT Anomalies (Rel. 1920-1970) in XGHG: {year.values}')
+    fig_map = figure_axis.pcolor(ds.TREFHT.sel(year=year), cmap='PuOr', vmax=1, vmin=-1)
+    figure.colorbar(fig_map, ax=figure_axis, format='%.0f')
     # create file name and append it to a list
-    filename = f'{uuid4()}.png'
-    filenames.append(filename)
+    filename = f'{year}-{uuid4()}.png'
+    filenames_queue.put(filename)
 
     # save frame
     figure.savefig(filename)
-    figure.close()
+    print(f"Initializing process {year}")
+
+
+processes = []
+for year in xghg_years:
+    proc = Process(target=output_frame, args=(xghg_avg_ds, year, filenames,))
+    proc.daemon = True
+    proc.start()
+    processes.append(proc)
+
+for process in processes:
+    process.join()
+
 # build gif
-with imageio.get_writer('output3.gif', mode='I') as writer:
-    for filename in filenames:
-        image = imageio.imread(filename)
-        writer.append_data(image)
+filenames_list = []
+while not filenames.empty():
+    name = filenames.get()
+    filenames_list.append(name)
+filenames_list.sort()
+# with imageio.get_writer('output3.gif', mode='I') as writer:
+#     for name in filenames_list:
+#         image = imageio.imread(name)
+#         writer.append_data(image)
+
+images = []
+for name in filenames_list:
+    images.append(imageio.imread(name))
+kargs = { 'duration': 0.3 }
+imageio.mimsave("output3.gif", images, **kargs)
 
 # Remove files
-for filename in set(filenames):
+for filename in set(filenames_list):
     remove(filename)
