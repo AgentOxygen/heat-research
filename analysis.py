@@ -1,12 +1,13 @@
-from settings import RESAMPLED_YEARLY_AVG
+from settings import RESAMPLED_YEARLY_AVG, POST_HEAT_THRESHOLDS_1920_TO_1950, DATA_DIR, POST_HEAT_OUTPUT_1920_1950_BASE
 import xarray
 import numpy as np
 import matplotlib.pyplot as plt
-from os import listdir, remove
+from os import listdir, remove, system
 import imageio
 from uuid import uuid4
 from multiprocessing import Process, Queue
 from subprocess import Popen, PIPE
+import preprocessing as pp
 
 dataset_names = listdir(RESAMPLED_YEARLY_AVG)
 xaer_datasets = [name for name in dataset_names if 'XAER' in name]
@@ -17,8 +18,16 @@ trefht_xaer_datasets = [name for name in xaer_datasets if 'TREFHT_' in name]
 trefht_xghg_datasets = [name for name in xghg_datasets if 'TREFHT_' in name]
 trefht_hist_datasets = [name for name in hist_datasets if 'TREFHT_' in name]
 
-print("Dataset paths loaded.")
+dataset_names = listdir(POST_HEAT_THRESHOLDS_1920_TO_1950)
+xaer_datasets = [name for name in dataset_names if 'XAER' in name]
+xghg_datasets = [name for name in dataset_names if 'XGHG' in name]
+hist_datasets = [name for name in dataset_names if 'HIST' in name]
 
+threshold_xaer_datasets = [name for name in xaer_datasets if 'TREFHT_' in name]
+threshold_xghg_datasets = [name for name in xghg_datasets if 'TREFHT_' in name]
+threshold_hist_datasets = [name for name in hist_datasets if 'TREFHT_' in name]
+
+print("Dataset paths loaded.")
 
 def avg_min_max_list_of_lists(lists: list) -> tuple:
     list_max = lists[0] * 1
@@ -186,6 +195,60 @@ def output_all_animated() -> None:
     output_animated_yrly_trefht_based(trefht_xghg_datasets, "xghg-output.gif", "XGHG")
     output_animated_yrly_trefht_based(trefht_hist_datasets, "all-output.gif", "ALL", color_bar_max=3)
 
-process = Popen(['python3', 'ehfheatwaves_threshold.py', f'-x ../{max_ds_name}.nc', f'-n ../{min_ds_name}.nc',
-                 '--t90pc --base=1921-2050 -d CESM2 -p 90'], stdout=PIPE, stderr=PIPE)
-stdout, stderr = process.communicate()
+
+def process_heat_thresholds_1920_1950() -> None:
+    processes = []
+    formers = [(pp.trefhtmax_xghg_former_em, pp.trefhtmin_xghg_former_em, "XGHG"),
+               (pp.trefhtmax_xaer_former_em, pp.trefhtmin_xaer_former_em, "XAER"),
+               (pp.trefhtmax_hist_former_em, pp.trefhtmin_hist_former_em, "ALL")]
+    for max_em, min_em, label in formers:
+        for index, max_former_path in enumerate(max_em):
+            max_ds_path = DATA_DIR + max_former_path
+            min_ds_path = DATA_DIR + min_em[index]
+            print(max_ds_path)
+            print(min_ds_path)
+            proc = Process(target=system,
+                           args=(f'python3 ehfheatwaves_threshold.py -x {max_ds_path} -n {min_ds_path}'
+                                 + f' --change_dir {POST_HEAT_THRESHOLDS_1920_TO_1950}{label}-{index}-'
+                                 + f' --t90pc --base=1920-1950 -d CESM2 -p 90 --vnamex TREFHTMX --vnamen TREFHTMN',))
+            proc.daemon = True
+            proc.start()
+            processes.append(proc)
+
+    for process in processes:
+        process.join()
+
+
+def calculate_heat_metrics_1920_1950_baseline() -> None:
+    processes = []
+    ensemble_members = [(pp.trefhtmax_xghg_former_em, pp.trefhtmin_xghg_former_em,
+                         threshold_xghg_datasets, "former-XGHG"),
+                        (pp.trefhtmax_xaer_former_em, pp.trefhtmin_xaer_former_em,
+                         threshold_xaer_datasets, "former-XAER"),
+                        (pp.trefhtmax_hist_former_em, pp.trefhtmin_hist_former_em,
+                         threshold_hist_datasets, "former-ALL"),
+                        (pp.trefhtmax_xghg_latter_em, pp.trefhtmin_xghg_latter_em,
+                         threshold_xghg_datasets, "latter-XGHG"),
+                        (pp.trefhtmax_xaer_latter_em, pp.trefhtmin_xaer_latter_em,
+                         threshold_xaer_datasets, "latter-XAER"),
+                        (pp.trefhtmax_hist_latter_em, pp.trefhtmin_hist_latter_em,
+                         threshold_hist_datasets, "latter-ALL")]
+    for max_em, min_em, threshold_em, label in ensemble_members:
+        for index, max_former_path in enumerate(max_em):
+            max_ds_path = DATA_DIR + max_former_path
+            min_ds_path = DATA_DIR + min_em[index]
+            print(max_ds_path)
+            print(min_ds_path)
+            proc = Process(target=system,
+                           args=(f'python3 ehfheatwaves_compound_inputthres_3.py -x {max_ds_path} -n {min_ds_path}'
+                                 + f' --change_dir {POST_HEAT_OUTPUT_1920_1950_BASE}{label}-{index}-'
+                                 + f' --t90pc --base=1920-1950 -d CESM2 -p 90 --vnamex TREFHTMX --vnamen TREFHTMN',))
+            proc.daemon = True
+            proc.start()
+            processes.append(proc)
+
+    for process in processes:
+        process.join()
+
+
+calculate_heat_metrics_1920_1950_baseline()

@@ -63,6 +63,8 @@ parser.add_option('--thres', dest='thresfile',
         help='file containing thresholds pre-calculated from base period', metavar='FILE')
 parser.add_option('--syn', dest='syn',
         help='file containing synthetic data to add to daily maximum and daily minimum (varnames=DMAX,DMIN)', metavar='FILE')
+parser.add_option('--change_dir', dest='output_dir', metavar='STR', default="",
+                help='Change output directory.')
 (options, args) = parser.parse_args()
 if not options.tmaxfile or not options.tminfile:
     print ("Please specify tmax and tmin files.")
@@ -79,6 +81,7 @@ else:
 
 # Percentile
 pcntl = options.pcntl
+output_dir = options.output_dir
 
 # season (winter/summer)
 season = options.season
@@ -291,12 +294,12 @@ def identify_hw(ehfs):
     """
      # Agregate consecutive days with EHF>0, and consecutive days where EHF<0 (not heat wave)
     events = (ehfs>0.).astype(np.int)
-    breaks = (events-1)/(-1) 
+    breaks = (events-1)/(-1)
     evente = events.copy()
     breake = breaks.copy()
     #event and break durations on first day of each:
     for i in range(ehfs.shape[0]-2,-1,-1):
-         events[i,events[i,...]>0] = events[i+1,events[i,...]>0]+1 
+         events[i,events[i,...]>0] = events[i+1,events[i,...]>0]+1
          breaks[i,breaks[i,...]>0] = breaks[i+1,breaks[i,...]>0]+1
     #event and break durations on last day of each:
     for i in range(1,ehfs.shape[0],1):
@@ -352,7 +355,7 @@ def identify_hw(ehfs):
     size = ehfs.shape[0]
     for i in range(lasttime,-1,-1):
         xy=np.logical_and(chw[i,...]>0,breakafter[i,...]<=bmax) #only evaluation for first days of events part of compound events, where the break after is less than max break length
-        eduration=endes[i,xy]    
+        eduration=endes[i,xy]
         bafter=breakafter[i,xy]
         eaddi=i+eduration+bafter
         eaddi[eaddi>lasttime]=size #first day endss always=0, so use this index
@@ -428,7 +431,7 @@ def hw_aspects(EHF, season, hemisphere):
         hw_i, chw_i, ahw_i, ahw1_i, ahw2_i = identify_hw(EHF_i)
         # Remove events that start after the end of the season and before start
         EHF_i = EHF_i[0:,...]
-        hw_i = hw_i[0:]  
+        hw_i = hw_i[0:]
         chw_i = chw_i[0:]
         ahw_i = ahw_i[0:]
         ahw1_i = ahw1_i[0:]
@@ -448,7 +451,7 @@ def hw_aspects(EHF, season, hemisphere):
         AHW1D[iyear,...] = ahw1_i.max(axis=0)
         AHW2F[iyear,...] = ahw2_i.sum(axis=0)
         AHW2D[iyear,...] = ahw2_i.max(axis=0)
-    return HWN, HWF, HWD, CHWN, CHWF, CHWD, AHWN, AHWF, AHWD, AHW1N, AHW1F, AHW1D, AHW2F, AHW2D 
+    return HWN, HWF, HWD, CHWN, CHWF, CHWD, AHWN, AHWF, AHWD, AHW1N, AHW1F, AHW1D, AHW2F, AHW2D
 
 # Calculate metrics year by year
 def split_hemispheres(EHF):
@@ -562,7 +565,7 @@ except KeyError:
     space = (tmaxnc.dimensions['latitude'].__len__(),tmaxnc.dimensions['longitude'].__len__())
 
 def save_yearly(HWN, HWF, HWD, CHWN, CHWF, CHWD, AHWN, AHWF, AHWD, AHW1N, AHW1F, AHW1D, AHW2F, AHW2D, definition, basedat):
-    yearlyout = Dataset('%s_heatwaves_%s_r%s_%s_yearly_%s.nc'%(definition,model,realization,experiment,season), 'w')
+    yearlyout = Dataset(output_dir + '%s_heatwaves_%s_r%s_%s_yearly_%s.nc'%(definition,model,realization,experiment,season), 'w')
     yearlyout.createDimension('time', len(range(first_year,
             daylast.year+1)))
     yearlyout.createDimension('lon', tmaxnc.dimensions[lonname].__len__())
@@ -754,130 +757,170 @@ def save_yearly(HWN, HWF, HWD, CHWN, CHWF, CHWD, AHWN, AHWF, AHWD, AHW1N, AHW1F,
         AHW2Dout[:] = AHW2D.reshape((nyears,)+space)
     yearlyout.close()
 
+
 ###########DEFINTION-el3-bmax3-e2l3-dm6####################
-# Inputs
-elength = 3 #required length of first heat wave(>=e2length)
-bmax = 3 #maximum length of a break
-e2length = 3 #required length of heat waves that can compound
-dmin = 6 #required minimum number of hot days for compound event
+def definition_el3_bmax3_e2l3_dm6() -> None:
+    # Inputs
+    elength = 3 #required length of first heat wave(>=e2length)
+    bmax = 3 #maximum length of a break
+    e2length = 3 #required length of heat waves that can compound
+    dmin = 6 #required minimum number of hot days for compound event
 
-# Split by latitude
-HWN_tx, HWF_tx, HWD_tx, CHWN_tx, CHWF_tx, CHWD_tx, AHWN_tx, AHWF_tx, AHWD_tx, AHW1N_tx, AHW1F_tx, AHW1D_tx, AHW2F_tx, AHW2D_tx = \
-            split_hemispheres(txexceed)
-HWN_tn, HWF_tn, HWD_tn, CHWN_tn, CHWF_tn, CHWD_tn, AHWN_tn, AHWF_tn, AHWD_tn, AHW1N_tn, AHW1F_tn, AHW1D_tn, AHW2F_tn, AHW2D_tn = \
-            split_hemispheres(tnexceed)
+    # Split by latitude
+    HWN_tx, HWF_tx, HWD_tx, CHWN_tx, CHWF_tx, CHWD_tx, AHWN_tx, AHWF_tx, AHWD_tx, AHW1N_tx, AHW1F_tx, AHW1D_tx, AHW2F_tx, AHW2D_tx = \
+                split_hemispheres(txexceed)
+    HWN_tn, HWF_tn, HWD_tn, CHWN_tn, CHWF_tn, CHWD_tn, AHWN_tn, AHWF_tn, AHWD_tn, AHW1N_tn, AHW1F_tn, AHW1D_tn, AHW2F_tn, AHW2D_tn = \
+                split_hemispheres(tnexceed)
 
-# Save to netCDF
-try:
-    experiment = str(elength).rstrip('0').rstrip('.')+str(bmax).rstrip('0').rstrip('.')+str(e2length).rstrip('0').rstrip('.')+str(dmin).rstrip('0').rstrip('.')
-except AttributeError:
-    experiment = ''
-save_yearly(HWN_tx,HWF_tx,HWD_tx,CHWN_tx,CHWF_tx,CHWD_tx,AHWN_tx,AHWF_tx,AHWD_tx,AHW1N_tx,AHW1F_tx,AHW1D_tx,AHW2F_tx,AHW2D_tx,'tx%spct'%(str(pcntl).rstrip('0').rstrip('.')),'tx')
-save_yearly(HWN_tn,HWF_tn,HWD_tn,CHWN_tn,CHWF_tn,CHWD_tn,AHWN_tn,AHWF_tn,AHWD_tn,AHW1N_tn,AHW1F_tn,AHW1D_tn,AHW2F_tn,AHW2D_tn,'tn%spct'%(str(pcntl).rstrip('0').rstrip('.')),'tn')
+    # Save to netCDF
+    try:
+        experiment = str(elength).rstrip('0').rstrip('.')+str(bmax).rstrip('0').rstrip('.')+str(e2length).rstrip('0').rstrip('.')+str(dmin).rstrip('0').rstrip('.')
+    except AttributeError:
+        experiment = ''
+    save_yearly(HWN_tx,HWF_tx,HWD_tx,CHWN_tx,CHWF_tx,CHWD_tx,AHWN_tx,AHWF_tx,AHWD_tx,AHW1N_tx,AHW1F_tx,AHW1D_tx,AHW2F_tx,AHW2D_tx,'tx%spct'%(str(pcntl).rstrip('0').rstrip('.')),'tx')
+    save_yearly(HWN_tn,HWF_tn,HWD_tn,CHWN_tn,CHWF_tn,CHWD_tn,AHWN_tn,AHWF_tn,AHWD_tn,AHW1N_tn,AHW1F_tn,AHW1D_tn,AHW2F_tn,AHW2D_tn,'tn%spct'%(str(pcntl).rstrip('0').rstrip('.')),'tn')
+
 
 ###########DEFINTION-el3-bmax3-e2l1-dm4####################
-# Inputs
-elength = 3 #required length of first heat wave(>=e2length)
-bmax = 3 #maximum length of a break
-e2length = 1 #required length of heat waves that can compound
-dmin = 4 #required minimum number of hot days for compound event
+def definition_el3_bmax3_e2l1_dm4() -> None:
+    # Inputs
+    elength = 3 #required length of first heat wave(>=e2length)
+    bmax = 3 #maximum length of a break
+    e2length = 1 #required length of heat waves that can compound
+    dmin = 4 #required minimum number of hot days for compound event
 
-# Split by latitude
-HWN_tx, HWF_tx, HWD_tx, CHWN_tx, CHWF_tx, CHWD_tx, AHWN_tx, AHWF_tx, AHWD_tx, AHW1N_tx, AHW1F_tx, AHW1D_tx, AHW2F_tx, AHW2D_tx = \
-            split_hemispheres(txexceed)
-HWN_tn, HWF_tn, HWD_tn, CHWN_tn, CHWF_tn, CHWD_tn, AHWN_tn, AHWF_tn, AHWD_tn, AHW1N_tn, AHW1F_tn, AHW1D_tn, AHW2F_tn, AHW2D_tn = \
-            split_hemispheres(tnexceed)
+    # Split by latitude
+    HWN_tx, HWF_tx, HWD_tx, CHWN_tx, CHWF_tx, CHWD_tx, AHWN_tx, AHWF_tx, AHWD_tx, AHW1N_tx, AHW1F_tx, AHW1D_tx, AHW2F_tx, AHW2D_tx = \
+                split_hemispheres(txexceed)
+    HWN_tn, HWF_tn, HWD_tn, CHWN_tn, CHWF_tn, CHWD_tn, AHWN_tn, AHWF_tn, AHWD_tn, AHW1N_tn, AHW1F_tn, AHW1D_tn, AHW2F_tn, AHW2D_tn = \
+                split_hemispheres(tnexceed)
 
-# Save to netCDF
-try:
-    experiment = str(elength).rstrip('0').rstrip('.')+str(bmax).rstrip('0').rstrip('.')+str(e2length).rstrip('0').rstrip('.')+str(dmin).rstrip('0').rstrip('.')
-except AttributeError:
-    experiment = ''
-save_yearly(HWN_tx,HWF_tx,HWD_tx,CHWN_tx,CHWF_tx,CHWD_tx,AHWN_tx,AHWF_tx,AHWD_tx,AHW1N_tx,AHW1F_tx,AHW1D_tx,AHW2F_tx,AHW2D_tx,'tx%spct'%(str(pcntl).rstrip('0').rstrip('.')),'tx')
-save_yearly(HWN_tn,HWF_tn,HWD_tn,CHWN_tn,CHWF_tn,CHWD_tn,AHWN_tn,AHWF_tn,AHWD_tn,AHW1N_tn,AHW1F_tn,AHW1D_tn,AHW2F_tn,AHW2D_tn,'tn%spct'%(str(pcntl).rstrip('0').rstrip('.')),'tn')
+    # Save to netCDF
+    try:
+        experiment = str(elength).rstrip('0').rstrip('.')+str(bmax).rstrip('0').rstrip('.')+str(e2length).rstrip('0').rstrip('.')+str(dmin).rstrip('0').rstrip('.')
+    except AttributeError:
+        experiment = ''
+    save_yearly(HWN_tx,HWF_tx,HWD_tx,CHWN_tx,CHWF_tx,CHWD_tx,AHWN_tx,AHWF_tx,AHWD_tx,AHW1N_tx,AHW1F_tx,AHW1D_tx,AHW2F_tx,AHW2D_tx,'tx%spct'%(str(pcntl).rstrip('0').rstrip('.')),'tx')
+    save_yearly(HWN_tn,HWF_tn,HWD_tn,CHWN_tn,CHWF_tn,CHWD_tn,AHWN_tn,AHWF_tn,AHWD_tn,AHW1N_tn,AHW1F_tn,AHW1D_tn,AHW2F_tn,AHW2D_tn,'tn%spct'%(str(pcntl).rstrip('0').rstrip('.')),'tn')
+
 
 ###########DEFINTION-el3-bmax2-e2l3-dm6####################
-# Inputs
-elength = 3 #required length of first heat wave(>=e2length)
-bmax = 2 #maximum length of a break
-e2length = 3 #required length of heat waves that can compound
-dmin = 6 #required minimum number of hot days for compound event
+def definition_el3_bmax2_e2l3_dm6() -> None:
+    # Inputs
+    elength = 3 #required length of first heat wave(>=e2length)
+    bmax = 2 #maximum length of a break
+    e2length = 3 #required length of heat waves that can compound
+    dmin = 6 #required minimum number of hot days for compound event
 
-# Split by latitude
-HWN_tx, HWF_tx, HWD_tx, CHWN_tx, CHWF_tx, CHWD_tx, AHWN_tx, AHWF_tx, AHWD_tx, AHW1N_tx, AHW1F_tx, AHW1D_tx, AHW2F_tx, AHW2D_tx = \
-            split_hemispheres(txexceed)
-HWN_tn, HWF_tn, HWD_tn, CHWN_tn, CHWF_tn, CHWD_tn, AHWN_tn, AHWF_tn, AHWD_tn, AHW1N_tn, AHW1F_tn, AHW1D_tn, AHW2F_tn, AHW2D_tn = \
-            split_hemispheres(tnexceed)
+    # Split by latitude
+    HWN_tx, HWF_tx, HWD_tx, CHWN_tx, CHWF_tx, CHWD_tx, AHWN_tx, AHWF_tx, AHWD_tx, AHW1N_tx, AHW1F_tx, AHW1D_tx, AHW2F_tx, AHW2D_tx = \
+                split_hemispheres(txexceed)
+    HWN_tn, HWF_tn, HWD_tn, CHWN_tn, CHWF_tn, CHWD_tn, AHWN_tn, AHWF_tn, AHWD_tn, AHW1N_tn, AHW1F_tn, AHW1D_tn, AHW2F_tn, AHW2D_tn = \
+                split_hemispheres(tnexceed)
 
-# Save to netCDF
-try:
-    experiment = str(elength).rstrip('0').rstrip('.')+str(bmax).rstrip('0').rstrip('.')+str(e2length).rstrip('0').rstrip('.')+str(dmin).rstrip('0').rstrip('.')
-except AttributeError:
-    experiment = ''
-save_yearly(HWN_tx,HWF_tx,HWD_tx,CHWN_tx,CHWF_tx,CHWD_tx,AHWN_tx,AHWF_tx,AHWD_tx,AHW1N_tx,AHW1F_tx,AHW1D_tx,AHW2F_tx,AHW2D_tx,'tx%spct'%(str(pcntl).rstrip('0').rstrip('.')),'tx')
-save_yearly(HWN_tn,HWF_tn,HWD_tn,CHWN_tn,CHWF_tn,CHWD_tn,AHWN_tn,AHWF_tn,AHWD_tn,AHW1N_tn,AHW1F_tn,AHW1D_tn,AHW2F_tn,AHW2D_tn,'tn%spct'%(str(pcntl).rstrip('0').rstrip('.')),'tn')
+    # Save to netCDF
+    try:
+        experiment = str(elength).rstrip('0').rstrip('.')+str(bmax).rstrip('0').rstrip('.')+str(e2length).rstrip('0').rstrip('.')+str(dmin).rstrip('0').rstrip('.')
+    except AttributeError:
+        experiment = ''
+    save_yearly(HWN_tx,HWF_tx,HWD_tx,CHWN_tx,CHWF_tx,CHWD_tx,AHWN_tx,AHWF_tx,AHWD_tx,AHW1N_tx,AHW1F_tx,AHW1D_tx,AHW2F_tx,AHW2D_tx,'tx%spct'%(str(pcntl).rstrip('0').rstrip('.')),'tx')
+    save_yearly(HWN_tn,HWF_tn,HWD_tn,CHWN_tn,CHWF_tn,CHWD_tn,AHWN_tn,AHWF_tn,AHWD_tn,AHW1N_tn,AHW1F_tn,AHW1D_tn,AHW2F_tn,AHW2D_tn,'tn%spct'%(str(pcntl).rstrip('0').rstrip('.')),'tn')
+
 
 ###########DEFINTION-el3-bmax2-e2l1-dm4####################
-# Inputs
-elength = 3 #required length of first heat wave(>=e2length)
-bmax = 2 #maximum length of a break
-e2length = 1 #required length of heat waves that can compound
-dmin = 4 #required minimum number of hot days for compound event
+def definition_el3_bmax2_e2l1_dm4() -> None:
+    # Inputs
+    elength = 3 #required length of first heat wave(>=e2length)
+    bmax = 2 #maximum length of a break
+    e2length = 1 #required length of heat waves that can compound
+    dmin = 4 #required minimum number of hot days for compound event
 
-# Split by latitude
-HWN_tx, HWF_tx, HWD_tx, CHWN_tx, CHWF_tx, CHWD_tx, AHWN_tx, AHWF_tx, AHWD_tx, AHW1N_tx, AHW1F_tx, AHW1D_tx, AHW2F_tx, AHW2D_tx = \
-            split_hemispheres(txexceed)
-HWN_tn, HWF_tn, HWD_tn, CHWN_tn, CHWF_tn, CHWD_tn, AHWN_tn, AHWF_tn, AHWD_tn, AHW1N_tn, AHW1F_tn, AHW1D_tn, AHW2F_tn, AHW2D_tn = \
-            split_hemispheres(tnexceed)
+    # Split by latitude
+    HWN_tx, HWF_tx, HWD_tx, CHWN_tx, CHWF_tx, CHWD_tx, AHWN_tx, AHWF_tx, AHWD_tx, AHW1N_tx, AHW1F_tx, AHW1D_tx, AHW2F_tx, AHW2D_tx = \
+                split_hemispheres(txexceed)
+    HWN_tn, HWF_tn, HWD_tn, CHWN_tn, CHWF_tn, CHWD_tn, AHWN_tn, AHWF_tn, AHWD_tn, AHW1N_tn, AHW1F_tn, AHW1D_tn, AHW2F_tn, AHW2D_tn = \
+                split_hemispheres(tnexceed)
 
-# Save to netCDF
-try:
-    experiment = str(elength).rstrip('0').rstrip('.')+str(bmax).rstrip('0').rstrip('.')+str(e2length).rstrip('0').rstrip('.')+str(dmin).rstrip('0').rstrip('.')
-except AttributeError:
-    experiment = ''
-save_yearly(HWN_tx,HWF_tx,HWD_tx,CHWN_tx,CHWF_tx,CHWD_tx,AHWN_tx,AHWF_tx,AHWD_tx,AHW1N_tx,AHW1F_tx,AHW1D_tx,AHW2F_tx,AHW2D_tx,'tx%spct'%(str(pcntl).rstrip('0').rstrip('.')),'tx')
-save_yearly(HWN_tn,HWF_tn,HWD_tn,CHWN_tn,CHWF_tn,CHWD_tn,AHWN_tn,AHWF_tn,AHWD_tn,AHW1N_tn,AHW1F_tn,AHW1D_tn,AHW2F_tn,AHW2D_tn,'tn%spct'%(str(pcntl).rstrip('0').rstrip('.')),'tn')
+    # Save to netCDF
+    try:
+        experiment = str(elength).rstrip('0').rstrip('.')+str(bmax).rstrip('0').rstrip('.')+str(e2length).rstrip('0').rstrip('.')+str(dmin).rstrip('0').rstrip('.')
+    except AttributeError:
+        experiment = ''
+    save_yearly(HWN_tx,HWF_tx,HWD_tx,CHWN_tx,CHWF_tx,CHWD_tx,AHWN_tx,AHWF_tx,AHWD_tx,AHW1N_tx,AHW1F_tx,AHW1D_tx,AHW2F_tx,AHW2D_tx,'tx%spct'%(str(pcntl).rstrip('0').rstrip('.')),'tx')
+    save_yearly(HWN_tn,HWF_tn,HWD_tn,CHWN_tn,CHWF_tn,CHWD_tn,AHWN_tn,AHWF_tn,AHWD_tn,AHW1N_tn,AHW1F_tn,AHW1D_tn,AHW2F_tn,AHW2D_tn,'tn%spct'%(str(pcntl).rstrip('0').rstrip('.')),'tn')
+
 
 ###########DEFINTION-el3-bmax1-e2l3-dm6####################
-# Inputs
-elength = 3 #required length of first heat wave(>=e2length)
-bmax = 1 #maximum length of a break
-e2length = 3 #required length of heat waves that can compound
-dmin = 6 #required minimum number of hot days for compound event
+def definition_el3_bmax1_e2l3_dm6() -> None:
+    # Inputs
+    elength = 3 #required length of first heat wave(>=e2length)
+    bmax = 1 #maximum length of a break
+    e2length = 3 #required length of heat waves that can compound
+    dmin = 6 #required minimum number of hot days for compound event
 
-# Split by latitude
-HWN_tx, HWF_tx, HWD_tx, CHWN_tx, CHWF_tx, CHWD_tx, AHWN_tx, AHWF_tx, AHWD_tx, AHW1N_tx, AHW1F_tx, AHW1D_tx, AHW2F_tx, AHW2D_tx = \
-            split_hemispheres(txexceed)
-HWN_tn, HWF_tn, HWD_tn, CHWN_tn, CHWF_tn, CHWD_tn, AHWN_tn, AHWF_tn, AHWD_tn, AHW1N_tn, AHW1F_tn, AHW1D_tn, AHW2F_tn, AHW2D_tn = \
-            split_hemispheres(tnexceed)
+    # Split by latitude
+    HWN_tx, HWF_tx, HWD_tx, CHWN_tx, CHWF_tx, CHWD_tx, AHWN_tx, AHWF_tx, AHWD_tx, AHW1N_tx, AHW1F_tx, AHW1D_tx, AHW2F_tx, AHW2D_tx = \
+                split_hemispheres(txexceed)
+    HWN_tn, HWF_tn, HWD_tn, CHWN_tn, CHWF_tn, CHWD_tn, AHWN_tn, AHWF_tn, AHWD_tn, AHW1N_tn, AHW1F_tn, AHW1D_tn, AHW2F_tn, AHW2D_tn = \
+                split_hemispheres(tnexceed)
 
-# Save to netCDF
-try:
-    experiment = str(elength).rstrip('0').rstrip('.')+str(bmax).rstrip('0').rstrip('.')+str(e2length).rstrip('0').rstrip('.')+str(dmin).rstrip('0').rstrip('.')
-except AttributeError:
-    experiment = ''
-save_yearly(HWN_tx,HWF_tx,HWD_tx,CHWN_tx,CHWF_tx,CHWD_tx,AHWN_tx,AHWF_tx,AHWD_tx,AHW1N_tx,AHW1F_tx,AHW1D_tx,AHW2F_tx,AHW2D_tx,'tx%spct'%(str(pcntl).rstrip('0').rstrip('.')),'tx')
-save_yearly(HWN_tn,HWF_tn,HWD_tn,CHWN_tn,CHWF_tn,CHWD_tn,AHWN_tn,AHWF_tn,AHWD_tn,AHW1N_tn,AHW1F_tn,AHW1D_tn,AHW2F_tn,AHW2D_tn,'tn%spct'%(str(pcntl).rstrip('0').rstrip('.')),'tn')
+    # Save to netCDF
+    try:
+        experiment = str(elength).rstrip('0').rstrip('.')+str(bmax).rstrip('0').rstrip('.')+str(e2length).rstrip('0').rstrip('.')+str(dmin).rstrip('0').rstrip('.')
+    except AttributeError:
+        experiment = ''
+    save_yearly(HWN_tx,HWF_tx,HWD_tx,CHWN_tx,CHWF_tx,CHWD_tx,AHWN_tx,AHWF_tx,AHWD_tx,AHW1N_tx,AHW1F_tx,AHW1D_tx,AHW2F_tx,AHW2D_tx,'tx%spct'%(str(pcntl).rstrip('0').rstrip('.')),'tx')
+    save_yearly(HWN_tn,HWF_tn,HWD_tn,CHWN_tn,CHWF_tn,CHWD_tn,AHWN_tn,AHWF_tn,AHWD_tn,AHW1N_tn,AHW1F_tn,AHW1D_tn,AHW2F_tn,AHW2D_tn,'tn%spct'%(str(pcntl).rstrip('0').rstrip('.')),'tn')
+
 
 ###########DEFINTION-el3-bmax1-e2l1-dm4####################
-# Inputs
-elength = 3 #required length of first heat wave(>=e2length)
-bmax = 1 #maximum length of a break
-e2length = 1 #required length of heat waves that can compound
-dmin = 4 #required minimum number of hot days for compound event
+def definition_el3_bmax1_e2l1_dm4() -> None:
+    # Inputs
+    elength = 3 #required length of first heat wave(>=e2length)
+    bmax = 1 #maximum length of a break
+    e2length = 1 #required length of heat waves that can compound
+    dmin = 4 #required minimum number of hot days for compound event
 
-# Split by latitude
-HWN_tx, HWF_tx, HWD_tx, CHWN_tx, CHWF_tx, CHWD_tx, AHWN_tx, AHWF_tx, AHWD_tx, AHW1N_tx, AHW1F_tx, AHW1D_tx, AHW2F_tx, AHW2D_tx = \
-            split_hemispheres(txexceed)
-HWN_tn, HWF_tn, HWD_tn, CHWN_tn, CHWF_tn, CHWD_tn, AHWN_tn, AHWF_tn, AHWD_tn, AHW1N_tn, AHW1F_tn, AHW1D_tn, AHW2F_tn, AHW2D_tn = \
-            split_hemispheres(tnexceed)
+    # Split by latitude
+    HWN_tx, HWF_tx, HWD_tx, CHWN_tx, CHWF_tx, CHWD_tx, AHWN_tx, AHWF_tx, AHWD_tx, AHW1N_tx, AHW1F_tx, AHW1D_tx, AHW2F_tx, AHW2D_tx = \
+                split_hemispheres(txexceed)
+    HWN_tn, HWF_tn, HWD_tn, CHWN_tn, CHWF_tn, CHWD_tn, AHWN_tn, AHWF_tn, AHWD_tn, AHW1N_tn, AHW1F_tn, AHW1D_tn, AHW2F_tn, AHW2D_tn = \
+                split_hemispheres(tnexceed)
 
-# Save to netCDF
-try:
-    experiment = str(elength).rstrip('0').rstrip('.')+str(bmax).rstrip('0').rstrip('.')+str(e2length).rstrip('0').rstrip('.')+str(dmin).rstrip('0').rstrip('.')
-except AttributeError:
-    experiment = ''
-save_yearly(HWN_tx,HWF_tx,HWD_tx,CHWN_tx,CHWF_tx,CHWD_tx,AHWN_tx,AHWF_tx,AHWD_tx,AHW1N_tx,AHW1F_tx,AHW1D_tx,AHW2F_tx,AHW2D_tx,'tx%spct'%(str(pcntl).rstrip('0').rstrip('.')),'tx')
-save_yearly(HWN_tn,HWF_tn,HWD_tn,CHWN_tn,CHWF_tn,CHWD_tn,AHWN_tn,AHWF_tn,AHWD_tn,AHW1N_tn,AHW1F_tn,AHW1D_tn,AHW2F_tn,AHW2D_tn,'tn%spct'%(str(pcntl).rstrip('0').rstrip('.')),'tn')
+    # Save to netCDF
+    try:
+        experiment = str(elength).rstrip('0').rstrip('.')+str(bmax).rstrip('0').rstrip('.')+str(e2length).rstrip('0').rstrip('.')+str(dmin).rstrip('0').rstrip('.')
+    except AttributeError:
+        experiment = ''
+    save_yearly(HWN_tx,HWF_tx,HWD_tx,CHWN_tx,CHWF_tx,CHWD_tx,AHWN_tx,AHWF_tx,AHWD_tx,AHW1N_tx,AHW1F_tx,AHW1D_tx,AHW2F_tx,AHW2D_tx,'tx%spct'%(str(pcntl).rstrip('0').rstrip('.')),'tx')
+    save_yearly(HWN_tn,HWF_tn,HWD_tn,CHWN_tn,CHWF_tn,CHWD_tn,AHWN_tn,AHWF_tn,AHWD_tn,AHW1N_tn,AHW1F_tn,AHW1D_tn,AHW2F_tn,AHW2D_tn,'tn%spct'%(str(pcntl).rstrip('0').rstrip('.')),'tn')
 
 
+processes = []
+proc1 = Process(target=definition_el3_bmax3_e2l3_dm6)
+proc1.daemon = True
+proc1.start()
+processes.append(proc1)
+proc2 = Process(target=definition_el3_bmax3_e2l1_dm4)
+proc2.daemon = True
+proc2.start()
+processes.append(proc2)
+proc = Process(target=definition_el3_bmax2_e2l3_dm6)
+proc3.daemon = True
+proc3.start()
+processes.append(proc3)
+proc4 = Process(target=definition_el3_bmax2_e2l1_dm4)
+proc4.daemon = True
+proc4.start()
+processes.append(proc4)
+proc5 = Process(target=definition_el3_bmax1_e2l3_dm6)
+proc5.daemon = True
+proc5.start()
+processes.append(proc5)
+proc6 = Process(target=definition_el3_bmax1_e2l1_dm4)
+proc6.daemon = True
+proc6.start()
+processes.append(proc6)
+
+for process in processes:
+    process.join()
