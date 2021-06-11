@@ -1,4 +1,4 @@
-from settings import RESAMPLED_YEARLY_AVG, POST_HEAT_THRESHOLDS_1920_TO_1950, DATA_DIR, POST_HEAT_OUTPUT_1920_1950_BASE
+from settings import RESAMPLED_YEARLY_AVG, SAMPLE_NC, POST_HEAT_THRESHOLDS_1920_TO_1950, DATA_DIR, POST_HEAT_OUTPUT_1920_1950_BASE
 import xarray
 import numpy as np
 import matplotlib.pyplot as plt
@@ -19,13 +19,9 @@ trefht_xghg_datasets = [name for name in xghg_datasets if 'TREFHT_' in name]
 trefht_hist_datasets = [name for name in hist_datasets if 'TREFHT_' in name]
 
 dataset_names = listdir(POST_HEAT_THRESHOLDS_1920_TO_1950)
-xaer_datasets = [name for name in dataset_names if 'XAER' in name]
-xghg_datasets = [name for name in dataset_names if 'XGHG' in name]
-hist_datasets = [name for name in dataset_names if 'HIST' in name]
-
-threshold_xaer_datasets = [name for name in xaer_datasets if 'TREFHT_' in name]
-threshold_xghg_datasets = [name for name in xghg_datasets if 'TREFHT_' in name]
-threshold_hist_datasets = [name for name in hist_datasets if 'TREFHT_' in name]
+threshold_xaer_datasets = [name for name in dataset_names if 'XAER' in name]
+threshold_xghg_datasets = [name for name in dataset_names if 'XGHG' in name]
+threshold_hist_datasets = [name for name in dataset_names if 'ALL' in name]
 
 print("Dataset paths loaded.")
 
@@ -190,6 +186,60 @@ def output_animated_yrly_trefht_based(spec_dataset_names: list, img_output_path:
         remove(filename)
 
 
+def output_animated_sample() -> None:
+    data = xarray.open_dataset(SAMPLE_NC).AHWN_tx9pct
+    years = data.time.values
+    img_output_path = "output.gif"
+    label = "XGHG EM #4 Exp: 3336"
+    color_bar_max = 14
+    color_bar_min = 0
+
+    print("Plotting...")
+    filenames = Queue()
+
+    def output_frame(data_slice, year_, filenames_queue):
+        print(year_)
+        plt.clf()
+        figure = plt.figure()
+        figure_axis = figure.add_subplot()
+        figure_axis.set_title(f'AHWN (1920-2005) in {label}: {int(year_)}')
+        fig_map = figure_axis.pcolor(data_slice, cmap='gist_heat', vmax=color_bar_max, vmin=color_bar_min)
+        figure.colorbar(fig_map, ax=figure_axis, format='%.0f')
+        # create file name and append it to a list
+        filename_ = f'{year_}-{uuid4()}.png'
+        filenames_queue.put(filename_)
+
+        # save frame
+        figure.savefig(filename_)
+        print(f"Initializing process {year_}")
+
+    processes = []
+    for year in years:
+        proc = Process(target=output_frame, args=(data.sel(time=year).astype('float64'), year, filenames,))
+        proc.daemon = True
+        proc.start()
+        processes.append(proc)
+
+    for process in processes:
+        process.join()
+
+    filenames_list = []
+    while not filenames.empty():
+        name = filenames.get()
+        filenames_list.append(name)
+    filenames_list.sort()
+
+    images = []
+    for name in filenames_list:
+        images.append(imageio.imread(name))
+    kargs = {'duration': 0.7}
+    imageio.mimsave(img_output_path, images, **kargs)
+
+    # Remove files
+    for filename in set(filenames_list):
+        remove(filename)
+
+
 def output_all_animated() -> None:
     output_animated_yrly_trefht_based(trefht_xaer_datasets, "xaer-output.gif", "XAER", color_bar_max=3)
     output_animated_yrly_trefht_based(trefht_xghg_datasets, "xghg-output.gif", "XGHG")
@@ -237,18 +287,20 @@ def calculate_heat_metrics_1920_1950_baseline() -> None:
         for index, max_former_path in enumerate(max_em):
             max_ds_path = DATA_DIR + max_former_path
             min_ds_path = DATA_DIR + min_em[index]
+            th_path = POST_HEAT_THRESHOLDS_1920_TO_1950 + threshold_em[index]
             print(max_ds_path)
             print(min_ds_path)
             proc = Process(target=system,
                            args=(f'python3 ehfheatwaves_compound_inputthres_3.py -x {max_ds_path} -n {min_ds_path}'
-                                 + f' --change_dir {POST_HEAT_OUTPUT_1920_1950_BASE}{label}-{index}-'
-                                 + f' --t90pc --base=1920-1950 -d CESM2 -p 90 --vnamex TREFHTMX --vnamen TREFHTMN',))
+                                 + f' --change_dir {POST_HEAT_OUTPUT_1920_1950_BASE}{label}-{index}- --thres {th_path}'
+                                 + f' --base=1920-1950 -d CESM2 --vnamex TREFHTMX --vnamen TREFHTMN',))
             proc.daemon = True
             proc.start()
             processes.append(proc)
+            if (index + 1) % 6 == 0:
+                print(index)
+                for process in processes:
+                    process.join()
+        for process in processes:
+            process.join()
 
-    for process in processes:
-        process.join()
-
-
-calculate_heat_metrics_1920_1950_baseline()
