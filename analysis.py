@@ -1,4 +1,5 @@
-from settings import RESAMPLED_YEARLY_AVG, SAMPLE_NC, POST_HEAT_THRESHOLDS_1920_TO_1950, DATA_DIR, POST_HEAT_OUTPUT_1920_1950_BASE
+from settings import RESAMPLED_YEARLY_AVG, SAMPLE_NC, \
+    POST_HEAT_THRESHOLDS_1920_TO_1950, DATA_DIR, POST_HEAT_OUTPUT_1920_1950_BASE
 import xarray
 import numpy as np
 import matplotlib.pyplot as plt
@@ -23,7 +24,23 @@ threshold_xaer_datasets = [name for name in dataset_names if 'XAER' in name]
 threshold_xghg_datasets = [name for name in dataset_names if 'XGHG' in name]
 threshold_hist_datasets = [name for name in dataset_names if 'ALL' in name]
 
+dataset_names = listdir(POST_HEAT_OUTPUT_1920_1950_BASE)
+heat_out_max_former_xaer_datasets = [name for name in dataset_names if 'former-XAER' in name and 'tx' in name]
+heat_out_max_former_xghg_datasets = [name for name in dataset_names if 'former-XGHG' in name and 'tx' in name]
+heat_out_max_former_hist_datasets = [name for name in dataset_names if 'former-ALL' in name and 'tx' in name]
+heat_out_max_latter_xaer_datasets = [name for name in dataset_names if 'latter-XAER' in name and 'tx' in name]
+heat_out_max_latter_xghg_datasets = [name for name in dataset_names if 'latter-XGHG' in name and 'tx' in name]
+heat_out_max_latter_hist_datasets = [name for name in dataset_names if 'latter-ALL' in name and 'tx' in name]
+heat_out_min_former_xaer_datasets = [name for name in dataset_names if 'former-XAER' in name and 'tn' in name]
+heat_out_min_former_xghg_datasets = [name for name in dataset_names if 'former-XGHG' in name and 'tn' in name]
+heat_out_min_former_hist_datasets = [name for name in dataset_names if 'former-ALL' in name and 'tn' in name]
+heat_out_min_latter_xaer_datasets = [name for name in dataset_names if 'latter-XAER' in name and 'tn' in name]
+heat_out_min_latter_xghg_datasets = [name for name in dataset_names if 'latter-XGHG' in name and 'tn' in name]
+heat_out_min_latter_hist_datasets = [name for name in dataset_names if 'latter-ALL' in name and 'tn' in name]
+
+
 print("Dataset paths loaded.")
+
 
 def avg_min_max_list_of_lists(lists: list) -> tuple:
     list_max = lists[0] * 1
@@ -110,7 +127,8 @@ def fig1_recreation(img_output_path: str, time_slice_begin=1920, time_slice_end=
     figure_axis.fill_between(years, xaer_temp_min - xaer_baseline, xaer_temp_max - xaer_baseline, alpha=0.2, color='b')
     figure_axis.plot(years, xaer_temp_avg - xaer_baseline, 'b', label="XAER")
     figure_axis.plot(years, hist_mean_temps - hist_baseline, color="black", label="ALL")
-    figure_axis.fill_between(years, hist_temp_min - hist_baseline, hist_temp_max - hist_baseline, alpha=0.2, color='black')
+    figure_axis.fill_between(years, hist_temp_min - hist_baseline, hist_temp_max - hist_baseline,
+                             alpha=0.2, color='black')
     figure_axis.yaxis.set_ticks(np.arange(-0.6, 1.6, 0.3))
     figure_axis.set_ylim(-0.8, 1.6)
 
@@ -126,9 +144,11 @@ def output_animated_yrly_trefht_based(spec_dataset_names: list, img_output_path:
                                       time_slice_begin=1920, time_slice_end=2080,
                                       baseline_begin=1920, baseline_end=1970,
                                       color_bar_max=1, color_bar_min=-1) -> None:
-    years = xarray.open_dataset(RESAMPLED_YEARLY_AVG + spec_dataset_names[0]).sel(year=slice(time_slice_begin, time_slice_end)).year
+    years = xarray.open_dataset(RESAMPLED_YEARLY_AVG + spec_dataset_names[0])\
+        .sel(year=slice(time_slice_begin, time_slice_end)).year
     temp_lists = []
-    avg_ds = xarray.open_dataset(RESAMPLED_YEARLY_AVG + spec_dataset_names[0]).sel(year=slice(time_slice_begin, time_slice_end)) * 0
+    avg_ds = xarray.open_dataset(RESAMPLED_YEARLY_AVG + spec_dataset_names[0])\
+                 .sel(year=slice(time_slice_begin, time_slice_end)) * 0
     print("Initialized.")
     for ds_name in spec_dataset_names:
         ds = xarray.open_dataset(RESAMPLED_YEARLY_AVG + ds_name)
@@ -303,4 +323,39 @@ def calculate_heat_metrics_1920_1950_baseline() -> None:
                     process.join()
         for process in processes:
             process.join()
+
+
+def average_heat_outputs() -> None:
+    def process_ds(label_: str, exp_num_: str, datasets_: list) -> None:
+        full_label = f"{label_}-{exp_num_}.nc"
+        print(full_label)
+        definitions = [ds for ds in datasets_ if exp_num_ in ds]
+        average = xarray.open_dataset(POST_HEAT_OUTPUT_1920_1950_BASE + definitions[0]) * 0
+        for dataset_ in definitions:
+            ds = xarray.open_dataset(POST_HEAT_OUTPUT_1920_1950_BASE + dataset_)
+            average += ds
+        average = average / len(definitions)
+        average.to_netcdf(POST_HEAT_OUTPUT_1920_1950_BASE + "averages/" + full_label)
+
+    groups = [(heat_out_max_latter_hist_datasets, "latter-ALL-max"), (heat_out_max_former_hist_datasets, "former-ALL-max"),
+              (heat_out_max_latter_xaer_datasets, "latter-XAER-max"), (heat_out_max_former_xaer_datasets, "former-XAER-max"),
+              (heat_out_max_latter_xghg_datasets, "latter-XGHG-max"), (heat_out_max_former_xghg_datasets, "former-XGHG-max"),
+              (heat_out_min_latter_hist_datasets, "latter-ALL-min"), (heat_out_min_former_hist_datasets, "former-ALL-min"),
+              (heat_out_min_latter_xaer_datasets, "latter-XAER-min"), (heat_out_min_former_xaer_datasets, "former-XAER-min"),
+              (heat_out_min_latter_xghg_datasets, "latter-XGHG-min"), (heat_out_min_former_xghg_datasets, "former-XGHG-min")]
+
+    processes = []
+
+    for datasets, label in groups:
+        exp_nums = ["3336", "3314", "3236", "3214", "3136", "3114"]
+        for exp_num in exp_nums:
+            proc = Process(target=process_ds, args=(label, exp_num, datasets))
+            proc.daemon = True
+            proc.start()
+            processes.append(proc)
+
+        for process in processes:
+            process.join()
+
+
 
