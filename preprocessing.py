@@ -7,7 +7,7 @@ from multiprocessing import Process
 dataset_names = listdir(DATA_DIR)
 xaer_datasets = [name for name in dataset_names if 'xaer' in name]
 xghg_datasets = [name for name in dataset_names if 'xghg' in name]
-hist_datasets = [name for name in dataset_names if 'BRCP85C5CNBDRD' in name or 'B20TRC5CNBDRD' in name]
+all_datasets = [name for name in dataset_names if 'BRCP85C5CNBDRD' in name or 'B20TRC5CNBDRD' in name]
 
 # em -> ensemble members
 trefht_xaer_latter_em = [name for name in xaer_datasets if '.TREFHT.20060101-20801231' in name]
@@ -24,12 +24,12 @@ trefht_xghg_former_em = [name for name in xghg_datasets if '.TREFHT.19200101-200
 trefhtmin_xghg_former_em = [name for name in xghg_datasets if '.TREFHTMN.19200101-20051231' in name]
 trefhtmax_xghg_former_em = [name for name in xghg_datasets if '.TREFHTMX.19200101-20051231' in name]
 
-trefht_hist_latter_em = [name for name in hist_datasets if '.TREFHT.20060101-20801231' in name]
-trefhtmin_hist_latter_em = [name for name in hist_datasets if '.TREFHTMN.20060101-20801231' in name]
-trefhtmax_hist_latter_em = [name for name in hist_datasets if '.TREFHTMX.20060101-20801231' in name]
-trefht_hist_former_em = [name for name in hist_datasets if '.TREFHT.19200101-20051231' in name]
-trefhtmin_hist_former_em = [name for name in hist_datasets if '.TREFHTMN.19200101-20051231' in name]
-trefhtmax_hist_former_em = [name for name in hist_datasets if '.TREFHTMX.19200101-20051231' in name]
+trefht_all_latter_em = [name for name in all_datasets if '.TREFHT.20060101-20801231' in name]
+trefhtmin_all_latter_em = [name for name in all_datasets if '.TREFHTMN.20060101-20801231' in name]
+trefhtmax_all_latter_em = [name for name in all_datasets if '.TREFHTMX.20060101-20801231' in name]
+trefht_all_former_em = [name for name in all_datasets if '.TREFHT.19200101-20051231' in name]
+trefhtmin_all_former_em = [name for name in all_datasets if '.TREFHTMN.19200101-20051231' in name]
+trefhtmax_all_former_em = [name for name in all_datasets if '.TREFHTMX.19200101-20051231' in name]
 
 print("File Name Lists populated.")
 
@@ -124,25 +124,25 @@ def resample_xghg_data() -> None:
         process.join()
 
 
-def resample_hist_data() -> None:
+def resample_all_data() -> None:
     """
     Resamples ALL data into annual averages
     """
     def process_index(index: int) -> None:
-        trefht = [preprocess_resample_yearly_avg(trefht_hist_former_em[index]),
-                  preprocess_resample_yearly_avg(trefht_hist_latter_em[index])]
-        trefht_min = [preprocess_resample_yearly_avg(trefhtmin_hist_former_em[index]),
-                      preprocess_resample_yearly_avg(trefhtmin_hist_latter_em[index])]
-        trefht_max = [preprocess_resample_yearly_avg(trefhtmax_hist_former_em[index]),
-                      preprocess_resample_yearly_avg(trefhtmax_hist_latter_em[index])]
+        trefht = [preprocess_resample_yearly_avg(trefht_all_former_em[index]),
+                  preprocess_resample_yearly_avg(trefht_all_latter_em[index])]
+        trefht_min = [preprocess_resample_yearly_avg(trefhtmin_all_former_em[index]),
+                      preprocess_resample_yearly_avg(trefhtmin_all_latter_em[index])]
+        trefht_max = [preprocess_resample_yearly_avg(trefhtmax_all_former_em[index]),
+                      preprocess_resample_yearly_avg(trefhtmax_all_latter_em[index])]
 
         trefht = xarray.concat(trefht, dim="year")
         trefht_min = xarray.concat(trefht_min, dim="year")
         trefht_max = xarray.concat(trefht_max, dim="year")
 
-        trefht.to_netcdf(f"{RESAMPLED_YEARLY_AVG}TREFHT_hist_yearly_avg_conc_{index}.nc")
-        trefht_min.to_netcdf(f"{RESAMPLED_YEARLY_AVG}TREFHTMIN_hist_yearly_avg_conc_{index}.nc")
-        trefht_max.to_netcdf(f"{RESAMPLED_YEARLY_AVG}TREFHTMAX_hist_yearly_avg_conc_{index}.nc")
+        trefht.to_netcdf(f"{RESAMPLED_YEARLY_AVG}TREFHT_ALL_yearly_avg_conc_{index}.nc")
+        trefht_min.to_netcdf(f"{RESAMPLED_YEARLY_AVG}TREFHTMIN_ALL_yearly_avg_conc_{index}.nc")
+        trefht_max.to_netcdf(f"{RESAMPLED_YEARLY_AVG}TREFHTMAX_ALL_yearly_avg_conc_{index}.nc")
 
     processes = []
     for p_index in range(1, 21):
@@ -160,10 +160,10 @@ def slice_former_ensemble_datasets(start_date: str, end_date: str, output_dir: s
     processes = []
     ensemble_samples = [trefht_xaer_former_em, trefhtmin_xaer_former_em, trefhtmax_xaer_former_em,
                         trefht_xghg_former_em, trefhtmin_xghg_former_em, trefhtmax_xghg_former_em,
-                        trefht_hist_former_em, trefhtmin_hist_former_em, trefhtmax_hist_former_em]
+                        trefht_all_former_em, trefhtmin_all_former_em, trefhtmax_all_former_em]
     labels = ["TREFHT_XAER", "TREFHTMIN_XAER", "TREFHTMAX_XAER",
               "TREFHT_XGHG", "TREFHTMIN_XGHG", "TREFHTMAX_XGHG",
-              "TREFHT_HIST", "TREFHTMIN_HIST", "TREFHTMAX_HIST"]
+              "TREFHT_ALL", "TREFHTMIN_ALL", "TREFHTMAX_ALL"]
 
     for index, em in enumerate(ensemble_samples):
         for iindex, ds in enumerate(em):
