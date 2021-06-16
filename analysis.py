@@ -1,45 +1,58 @@
-from settings import RESAMPLED_YEARLY_AVG, SAMPLE_NC, \
+import os
+import cartopy.crs as ccrs
+from settings import RESAMPLED_YEARLY_AVG, SAMPLE_NC, POST_OUT_EM_AVGS_1920_1950, \
     POST_HEAT_THRESHOLDS_1920_TO_1950, DATA_DIR, POST_HEAT_OUTPUT_1920_1950_BASE
 import xarray
 import numpy as np
 import matplotlib.pyplot as plt
+from matplotlib import rc
 from os import listdir, remove, system
 import imageio
 from uuid import uuid4
 from multiprocessing import Process, Queue
-from subprocess import Popen, PIPE
 import preprocessing as pp
 
-dataset_names = listdir(RESAMPLED_YEARLY_AVG)
-xaer_datasets = [name for name in dataset_names if 'XAER' in name]
-xghg_datasets = [name for name in dataset_names if 'XGHG' in name]
-all_datasets = [name for name in dataset_names if 'all' in name]
+load_datasets = False
+if load_datasets:
+    dataset_names = listdir(RESAMPLED_YEARLY_AVG)
+    xaer_datasets = [name for name in dataset_names if 'XAER' in name]
+    xghg_datasets = [name for name in dataset_names if 'XGHG' in name]
+    all_datasets = [name for name in dataset_names if 'all' in name]
 
-trefht_xaer_datasets = [name for name in xaer_datasets if 'TREFHT_' in name]
-trefht_xghg_datasets = [name for name in xghg_datasets if 'TREFHT_' in name]
-trefht_all_datasets = [name for name in all_datasets if 'TREFHT_' in name]
+    trefht_xaer_datasets = [name for name in xaer_datasets if 'TREFHT_' in name]
+    trefht_xghg_datasets = [name for name in xghg_datasets if 'TREFHT_' in name]
+    trefht_all_datasets = [name for name in all_datasets if 'TREFHT_' in name]
 
-dataset_names = listdir(POST_HEAT_THRESHOLDS_1920_TO_1950)
-threshold_xaer_datasets = [name for name in dataset_names if 'XAER' in name]
-threshold_xghg_datasets = [name for name in dataset_names if 'XGHG' in name]
-threshold_all_datasets = [name for name in dataset_names if 'ALL' in name]
+    dataset_names = listdir(POST_HEAT_THRESHOLDS_1920_TO_1950)
+    threshold_xaer_datasets = [name for name in dataset_names if 'XAER' in name]
+    threshold_xghg_datasets = [name for name in dataset_names if 'XGHG' in name]
+    threshold_all_datasets = [name for name in dataset_names if 'ALL' in name]
 
-dataset_names = listdir(POST_HEAT_OUTPUT_1920_1950_BASE)
-heat_out_max_former_xaer_datasets = [name for name in dataset_names if 'former-XAER' in name and 'tx' in name]
-heat_out_max_former_xghg_datasets = [name for name in dataset_names if 'former-XGHG' in name and 'tx' in name]
-heat_out_max_former_all_datasets = [name for name in dataset_names if 'former-ALL' in name and 'tx' in name]
-heat_out_max_latter_xaer_datasets = [name for name in dataset_names if 'latter-XAER' in name and 'tx' in name]
-heat_out_max_latter_xghg_datasets = [name for name in dataset_names if 'latter-XGHG' in name and 'tx' in name]
-heat_out_max_latter_all_datasets = [name for name in dataset_names if 'latter-ALL' in name and 'tx' in name]
-heat_out_min_former_xaer_datasets = [name for name in dataset_names if 'former-XAER' in name and 'tn' in name]
-heat_out_min_former_xghg_datasets = [name for name in dataset_names if 'former-XGHG' in name and 'tn' in name]
-heat_out_min_former_all_datasets = [name for name in dataset_names if 'former-ALL' in name and 'tn' in name]
-heat_out_min_latter_xaer_datasets = [name for name in dataset_names if 'latter-XAER' in name and 'tn' in name]
-heat_out_min_latter_xghg_datasets = [name for name in dataset_names if 'latter-XGHG' in name and 'tn' in name]
-heat_out_min_latter_all_datasets = [name for name in dataset_names if 'latter-ALL' in name and 'tn' in name]
+    dataset_names = listdir(POST_HEAT_OUTPUT_1920_1950_BASE + "split/")
+    heat_out_max_former_xaer_datasets = [name for name in dataset_names if 'former-XAER' in name and 'tx' in name]
+    heat_out_max_former_xghg_datasets = [name for name in dataset_names if 'former-XGHG' in name and 'tx' in name]
+    heat_out_max_former_all_datasets = [name for name in dataset_names if 'former-ALL' in name and 'tx' in name]
+    heat_out_max_latter_xaer_datasets = [name for name in dataset_names if 'latter-XAER' in name and 'tx' in name]
+    heat_out_max_latter_xghg_datasets = [name for name in dataset_names if 'latter-XGHG' in name and 'tx' in name]
+    heat_out_max_latter_all_datasets = [name for name in dataset_names if 'latter-ALL' in name and 'tx' in name]
 
+    heat_out_min_former_xaer_datasets = [name for name in dataset_names if 'former-XAER' in name and 'tn' in name]
+    heat_out_min_former_xghg_datasets = [name for name in dataset_names if 'former-XGHG' in name and 'tn' in name]
+    heat_out_min_former_all_datasets = [name for name in dataset_names if 'former-ALL' in name and 'tn' in name]
+    heat_out_min_latter_xaer_datasets = [name for name in dataset_names if 'latter-XAER' in name and 'tn' in name]
+    heat_out_min_latter_xghg_datasets = [name for name in dataset_names if 'latter-XGHG' in name and 'tn' in name]
+    heat_out_min_latter_all_datasets = [name for name in dataset_names if 'latter-ALL' in name and 'tn' in name]
 
-print("Dataset paths loaded.")
+    dataset_names = listdir(POST_HEAT_OUTPUT_1920_1950_BASE)
+    heat_out_max_xaer_datasets = [name for name in dataset_names if 'XAER' in name and 'max' in name]
+    heat_out_max_xghg_datasets = [name for name in dataset_names if 'XGHG' in name and 'max' in name]
+    heat_out_max_all_datasets = [name for name in dataset_names if 'ALL' in name and 'max' in name]
+
+    heat_out_min_xaer_datasets = [name for name in dataset_names if 'XAER' in name and 'min' in name]
+    heat_out_min_xghg_datasets = [name for name in dataset_names if 'XGHG' in name and 'min' in name]
+    heat_out_min_all_datasets = [name for name in dataset_names if 'ALL' in name and 'min' in name]
+
+    print("Dataset paths loaded.")
 
 
 def avg_min_max_list_of_lists(lists: list) -> tuple:
@@ -312,7 +325,7 @@ def calculate_heat_metrics_1920_1950_baseline() -> None:
             print(min_ds_path)
             proc = Process(target=system,
                            args=(f'python3 ehfheatwaves_compound_inputthres_3.py -x {max_ds_path} -n {min_ds_path}'
-                                 + f' --change_dir {POST_HEAT_OUTPUT_1920_1950_BASE}{label}-{index}- --thres {th_path}'
+                                 + f' --change_dir {POST_HEAT_OUTPUT_1920_1950_BASE + "split/"}{label}-{index}- --thres {th_path}'
                                  + f' --base=1920-1950 -d CESM2 --vnamex TREFHTMX --vnamen TREFHTMN',))
             proc.daemon = True
             proc.start()
@@ -326,36 +339,118 @@ def calculate_heat_metrics_1920_1950_baseline() -> None:
 
 
 def average_heat_outputs() -> None:
-    def process_ds(label_: str, exp_num_: str, datasets_: list) -> None:
+    def process_ds(label_: str, exp_num_: str, latter_datasets_: list, former_datasets_: list) -> None:
         full_label = f"{label_}-{exp_num_}.nc"
         print(full_label)
-        definitions = [ds for ds in datasets_ if exp_num_ in ds]
-        average = xarray.open_dataset(POST_HEAT_OUTPUT_1920_1950_BASE + definitions[0]) * 0
-        for dataset_ in definitions:
-            ds = xarray.open_dataset(POST_HEAT_OUTPUT_1920_1950_BASE + dataset_)
-            average += ds
-        average = average / len(definitions)
-        average.to_netcdf(POST_HEAT_OUTPUT_1920_1950_BASE + "averages/" + full_label)
+        latter_definitions = [ds for ds in latter_datasets_ if exp_num_ in ds]
+        former_definitions = [ds for ds in former_datasets_ if exp_num_ in ds]
 
-    groups = [(heat_out_max_latter_all_datasets, "latter-ALL-max"), (heat_out_max_former_all_datasets, "former-ALL-max"),
-              (heat_out_max_latter_xaer_datasets, "latter-XAER-max"), (heat_out_max_former_xaer_datasets, "former-XAER-max"),
-              (heat_out_max_latter_xghg_datasets, "latter-XGHG-max"), (heat_out_max_former_xghg_datasets, "former-XGHG-max"),
-              (heat_out_min_latter_all_datasets, "latter-ALL-min"), (heat_out_min_former_all_datasets, "former-ALL-min"),
-              (heat_out_min_latter_xaer_datasets, "latter-XAER-min"), (heat_out_min_former_xaer_datasets, "former-XAER-min"),
-              (heat_out_min_latter_xghg_datasets, "latter-XGHG-min"), (heat_out_min_former_xghg_datasets, "former-XGHG-min")]
+        latter_average = xarray.open_dataset(POST_HEAT_OUTPUT_1920_1950_BASE + latter_definitions[0]) * 0
+        for dataset_ in latter_definitions:
+            ds = xarray.open_dataset(POST_HEAT_OUTPUT_1920_1950_BASE + dataset_)
+            latter_average += ds
+        latter_average = latter_average / len(latter_definitions)
+
+        if "tn9pct" in latter_average:
+            latter_average.drop("tn9pct")
+        else:
+            latter_average.drop("tx9pct")
+
+        former_average = xarray.open_dataset(POST_HEAT_OUTPUT_1920_1950_BASE + former_definitions[0]) * 0
+        for dataset_ in former_definitions:
+            ds = xarray.open_dataset(POST_HEAT_OUTPUT_1920_1950_BASE + dataset_)
+            former_average += ds
+        former_average = former_average / len(former_definitions)
+
+        if "tn9pct" in former_average:
+            former_average.drop("tn9pct")
+        else:
+            former_average.drop("tx9pct")
+
+        average = xarray.concat([former_average, latter_average], dim="time")
+        average.to_netcdf(POST_OUT_EM_AVGS_1920_1950 + full_label)
+
+    groups = [(heat_out_max_latter_all_datasets, heat_out_max_former_all_datasets, "ALL-max"),
+              (heat_out_max_latter_xaer_datasets, heat_out_max_former_xaer_datasets, "XAER-max"),
+              (heat_out_max_latter_xghg_datasets, heat_out_max_former_xghg_datasets, "XGHG-max"),
+              (heat_out_min_latter_all_datasets, heat_out_min_former_all_datasets, "ALL-min"),
+              (heat_out_min_latter_xaer_datasets, heat_out_min_former_xaer_datasets, "XAER-min"),
+              (heat_out_min_latter_xghg_datasets, heat_out_min_former_xghg_datasets, "XGHG-min")]
 
     processes = []
 
-    for datasets, label in groups:
+    for latter_datasets, former_datasets, label in groups:
         exp_nums = ["3336", "3314", "3236", "3214", "3136", "3114"]
         for exp_num in exp_nums:
-            proc = Process(target=process_ds, args=(label, exp_num, datasets))
+            proc = Process(target=process_ds, args=(label, exp_num, latter_datasets, former_datasets))
             proc.daemon = True
             proc.start()
             processes.append(proc)
 
         for process in processes:
             process.join()
+
+
+def concatenate_ensemble_members_heat_outputs() -> None:
+    def concat(former_name: str) -> None:
+        former_ds = xarray.open_dataset(path + former_name)
+        latter_ds = xarray.open_dataset(path + former_name.replace("former", "latter"))
+        concatenated = xarray.concat([former_ds, latter_ds], dim="time")
+        concat_name = former_name.replace("former-", "")
+        print(concat_name)
+        concatenated.to_netcdf(POST_HEAT_OUTPUT_1920_1950_BASE + concat_name)
+
+    path = POST_HEAT_OUTPUT_1920_1950_BASE + "split/"
+    file_names = os.listdir(path)
+    file_names = [name for name in file_names if 'former' in name]
+
+    processes = []
+
+    for index, former_name_ in enumerate(file_names):
+        print(f"Process {index}")
+        proc = Process(target=concat, args=(former_name_,))
+        proc.daemon = True
+        proc.start()
+        processes.append(proc)
+        if (index + 1) % 2 == 0:
+            for process in processes:
+                process.join()
+    for process in processes:
+        process.join()
+
+
+def output_heat_maps(past_begin: str, past_end: str, fut_begin: str, fut_end: str, out_dir: str) -> None:
+    exp_nums = ["3336", "3314", "3236", "3214", "3136", "3114"]
+    simulations = ["ALL", "XGHG", "XAER"]
+    variants = [("min", "tn9pct"), ("max", "tx9pct")]
+    for exp_num in exp_nums:
+        f, axis = plt.subplots(2, 3, figsize=(35, 13), subplot_kw=dict(projection=ccrs.PlateCarree()))
+        f.suptitle(f"EXP: {exp_num} | {past_begin}-{past_end} vs {fut_begin}-{fut_end}", fontsize=30)
+        font = {'family': 'normal',
+                'weight': 'bold',
+                'size': 22}
+        rc('font', **font)
+        index = 0
+        for row in axis:
+            variant, suffix = variants[index]
+            iindex = 0
+            for cell in row:
+                simulation = simulations[iindex]
+                title = f"{simulation} {variant}"
+                print(f"{exp_num} {title}")
+                ds = xarray.open_dataset(POST_OUT_EM_AVGS_1920_1950 + f"{simulation}-{variant}-{exp_num}.nc")
+                past = ds[f"HWF_{suffix}"].sel(time=(past_begin, past_end)).mean(dim="time").astype("timedelta64[D]")
+                future = ds[f"HWF_{suffix}"].sel(time=(fut_begin, fut_end)).mean(dim="time").astype("timedelta64[D]")
+                perc_change = (future - past) / past
+                data_plot = perc_change.plot(ax=cell)
+                cell.set_title(title)
+                cell.coastlines()
+                iindex += 1
+            index += 1
+
+        plt.tight_layout()
+        plt.savefig(f"{out_dir}/exp-{exp_num}-{past_begin}-{past_end}--{fut_begin}-{fut_end}.png")
+
 
 
 
