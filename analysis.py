@@ -1,10 +1,12 @@
 import os
 import cartopy.crs as ccrs
 from settings import RESAMPLED_YEARLY_AVG, SAMPLE_NC, POST_OUT_EM_AVGS_1920_1950, \
-    POST_HEAT_THRESHOLDS_1920_TO_1950, DATA_DIR, POST_HEAT_OUTPUT_1920_1950_BASE
+    POST_HEAT_THRESHOLDS_1920_TO_1950, DATA_DIR, POST_HEAT_OUTPUT_1920_1950_BASE, \
+    MERRA2_DATA
 import xarray
 import numpy as np
 import matplotlib.pyplot as plt
+from matplotlib import colors
 from matplotlib import rc
 from os import listdir, remove, system
 import imageio
@@ -419,13 +421,14 @@ def concatenate_ensemble_members_heat_outputs() -> None:
         process.join()
 
 
-def output_heat_maps(past_begin: str, past_end: str, fut_begin: str, fut_end: str, out_dir: str) -> None:
-    exp_nums = ["3336", "3314", "3236", "3214", "3136", "3114"]
+def output_heat_maps(variable:str, past_begin: str, past_end: str, fut_begin: str, fut_end: str, out_dir: str) -> None:
+    exp_nums = ["3336"]#, "3314", "3236", "3214", "3136", "3114"]
     simulations = ["ALL", "XGHG", "XAER"]
     variants = [("min", "tn9pct"), ("max", "tx9pct")]
     for exp_num in exp_nums:
         f, axis = plt.subplots(2, 3, figsize=(35, 13), subplot_kw=dict(projection=ccrs.PlateCarree()))
-        f.suptitle(f"EXP: {exp_num} | {past_begin}-{past_end} vs {fut_begin}-{fut_end}", fontsize=30)
+        f.suptitle(f"{variable} EXP:{exp_num} | AVG:{fut_begin}-{fut_end} minus AVG:{past_begin}-{past_end} Abs. Diff.",
+                   fontsize=30)
         font = {'family': 'normal',
                 'weight': 'bold',
                 'size': 22}
@@ -439,9 +442,9 @@ def output_heat_maps(past_begin: str, past_end: str, fut_begin: str, fut_end: st
                 title = f"{simulation} {variant}"
                 print(f"{exp_num} {title}")
                 ds = xarray.open_dataset(POST_OUT_EM_AVGS_1920_1950 + f"{simulation}-{variant}-{exp_num}.nc")
-                past = ds[f"HWF_{suffix}"].sel(time=(past_begin, past_end)).mean(dim="time").astype("timedelta64[D]")
-                future = ds[f"HWF_{suffix}"].sel(time=(fut_begin, fut_end)).mean(dim="time").astype("timedelta64[D]")
-                perc_change = (future - past) / past
+                past = ds[f"{variable}_{suffix}"].sel(time=(past_begin, past_end)).mean(dim="time").dt.days
+                future = ds[f"{variable}_{suffix}"].sel(time=(fut_begin, fut_end)).mean(dim="time").dt.days
+                perc_change = (future - past)
                 data_plot = perc_change.plot(ax=cell)
                 cell.set_title(title)
                 cell.coastlines()
@@ -452,5 +455,110 @@ def output_heat_maps(past_begin: str, past_end: str, fut_begin: str, fut_end: st
         plt.savefig(f"{out_dir}/exp-{exp_num}-{past_begin}-{past_end}--{fut_begin}-{fut_end}.png")
 
 
+FIGURE_IMAGE_OUTPUT = "/home/persad_users/csc3323/figure_outputs"
+# output_heat_maps("HWF", "1920", "1950", "2050", "2080", FIGURE_IMAGE_OUTPUT)
+# output_heat_maps("HWF", "1920", "1950", "1970", "2000", FIGURE_IMAGE_OUTPUT)
+# output_heat_maps("HWF", "1960", "1960", "1980", "1980", FIGURE_IMAGE_OUTPUT)
 
 
+def output_merra2_maps(exp_num: str, out_dir: str) -> None:
+    merra2_min = xarray.open_dataset(MERRA2_DATA + f"tn90pct_heatwaves_MERRA_r0_{exp_num}_yearly_summer.nc")\
+        .AHWF_tn90pct.mean(dim="time").dt.days
+    merra2_max = xarray.open_dataset(MERRA2_DATA + f"tx90pct_heatwaves_MERRA_r0_{exp_num}_yearly_summer.nc")\
+        .AHWF_tx90pct.mean(dim="time").dt.days
+
+    ensemble_min_avg = xarray.open_dataset(POST_OUT_EM_AVGS_1920_1950 + f"ALL-min-{exp_num}.nc")\
+        .AHWF_tn9pct.sel(time=("1980", "2015")).where(merra2_min)
+    ensemble_min_avg = ensemble_min_avg.sel(time=("1980", "2015")).mean(dim="time").dt.days
+    ensemble_max_avg = xarray.open_dataset(POST_OUT_EM_AVGS_1920_1950 + f"ALL-max-{exp_num}.nc") \
+        .AHWF_tx9pct.sel(time=("1980", "2015")).where(merra2_max)
+    ensemble_max_avg = ensemble_max_avg.sel(time=("1980", "2015")).mean(dim="time").dt.days
+
+    f, ((ax1, ax2, ax3), (ax4, ax5, ax6)) = plt.subplots(2, 3, figsize=(35, 13),
+                                                                   subplot_kw=dict(projection=ccrs.PlateCarree()))
+    f.suptitle(f"Exp. {exp_num} MERRA2 Comparison (1980-2015 Avg)", fontsize=30)
+    font = {'family': 'normal',
+            'weight': 'bold',
+            'size': 22}
+    rc('font', **font)
+
+    ax1.set_title("ALL AHWF Min. Top 90 Perc.")
+    ax1.coastlines()
+    ensemble_min_avg.plot(ax=ax1)
+
+    ax2.set_title("MERRA2 AHWF Min. Top 90 Perc.")
+    ax2.coastlines()
+    merra2_min.plot(ax=ax2)
+
+    ax3.set_title("ALL vs MERRA2 AHWF Min. Top 90 Perc.")
+    ax3.coastlines()
+    (ensemble_min_avg - merra2_min).plot(ax=ax3)
+
+    ax4.set_title("ALL AHWF Max. Top 90 Perc.")
+    ax4.coastlines()
+    ensemble_max_avg.plot(ax=ax4)
+
+    ax5.set_title("MERRA2 AHWF Max. Top 90 Perc.")
+    ax5.coastlines()
+    merra2_max.plot(ax=ax5)
+
+    ax6.set_title("ALL vs MERRA2 AHWF Max. Top 90 Perc.")
+    ax6.coastlines()
+    (ensemble_max_avg - merra2_max).plot(ax=ax6)
+
+    plt.tight_layout()
+    plt.savefig(f"{out_dir}/exp-{exp_num}-MERRA2-comparison.png")
+
+
+def output_heat_signal_isolating_maps(variable: str, exp_num: str, time_begin: str, time_end: str,
+                                      out_dir: str) -> None:
+    variants = [("min", "tn9pct"), ("max", "tx9pct")]
+    f, axis = plt.subplots(2, 3, figsize=(35, 13), subplot_kw=dict(projection=ccrs.PlateCarree()))
+    f.suptitle(f"{variable} EXP:{exp_num} | AVG:{time_begin}-{time_end} Abs. Value",
+               fontsize=30)
+    font = {'family': 'normal',
+            'weight': 'bold',
+            'size': 22}
+    rc('font', **font)
+    index = 0
+    for row in axis:
+        variant, suffix = variants[index]
+        iindex = 0
+        all_ds = xarray.open_dataset(POST_OUT_EM_AVGS_1920_1950 + f"ALL-{variant}-{exp_num}.nc")
+        all_ds = all_ds[f"{variable}_{suffix}"]
+        all_ds = all_ds.sel(time=(time_begin, time_end)).mean(dim="time").dt.days
+        vmin = -75
+        vmax = 75
+        norm = colors.TwoSlopeNorm(vmin=vmin, vcenter=0, vmax=vmax)
+        for cell in row:
+            title = f"ALL {variant}"
+            if iindex == 0:
+                all_ds.plot(ax=cell, cmap="seismic", norm=norm, vmax=vmax, vmin=vmin)
+            elif iindex == 1:
+                xghg_ds = xarray.open_dataset(POST_OUT_EM_AVGS_1920_1950 + f"XGHG-{variant}-{exp_num}.nc")
+                xghg_ds = xghg_ds[f"{variable}_{suffix}"]
+                xghg_ds = xghg_ds.sel(time=(time_begin, time_end)).mean(dim="time").dt.days
+                data_plot = all_ds - xghg_ds
+                data_plot.plot(ax=cell, cmap="seismic", norm=norm, vmax=vmax, vmin=vmin)
+                title = f"ALL - XGHG {variant}"
+            else:
+                xaer_ds = xarray.open_dataset(POST_OUT_EM_AVGS_1920_1950 + f"XAER-{variant}-{exp_num}.nc")
+                xaer_ds = xaer_ds[f"{variable}_{suffix}"]
+                xaer_ds = xaer_ds.sel(time=(time_begin, time_end)).mean(dim="time").dt.days
+                data_plot2 = all_ds - xaer_ds
+                data_plot2.plot(ax=cell, cmap="seismic", norm=norm, vmax=vmax, vmin=vmin)
+                title = f"ALL - XAER {variant}"
+            print(f"{exp_num} {title}")
+            cell.set_title(title)
+            cell.coastlines()
+            iindex += 1
+        index += 1
+
+    plt.tight_layout()
+    plt.savefig(f"{out_dir}/exp-{exp_num}-signal_isolation-{time_begin}-{time_end}.png")
+
+
+output_heat_signal_isolating_maps("HWF", "3336", "1960", "1990", FIGURE_IMAGE_OUTPUT)
+output_heat_signal_isolating_maps("HWF", "3336", "1990", "2020", FIGURE_IMAGE_OUTPUT)
+output_heat_signal_isolating_maps("HWF", "3336", "2020", "2050", FIGURE_IMAGE_OUTPUT)
+output_heat_signal_isolating_maps("HWF", "3336", "2050", "2080", FIGURE_IMAGE_OUTPUT)
