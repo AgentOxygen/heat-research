@@ -45,15 +45,6 @@ if load_datasets:
     heat_out_min_latter_xghg_datasets = [name for name in dataset_names if 'latter-XGHG' in name and 'tn' in name]
     heat_out_min_latter_all_datasets = [name for name in dataset_names if 'latter-ALL' in name and 'tn' in name]
 
-    dataset_names = listdir(POST_HEAT_OUTPUT_1920_1950_BASE)
-    heat_out_max_xaer_datasets = [name for name in dataset_names if 'XAER' in name and 'max' in name]
-    heat_out_max_xghg_datasets = [name for name in dataset_names if 'XGHG' in name and 'max' in name]
-    heat_out_max_all_datasets = [name for name in dataset_names if 'ALL' in name and 'max' in name]
-
-    heat_out_min_xaer_datasets = [name for name in dataset_names if 'XAER' in name and 'min' in name]
-    heat_out_min_xghg_datasets = [name for name in dataset_names if 'XGHG' in name and 'min' in name]
-    heat_out_min_all_datasets = [name for name in dataset_names if 'ALL' in name and 'min' in name]
-
     print("Dataset paths loaded.")
 
 
@@ -399,12 +390,20 @@ def concatenate_ensemble_members_heat_outputs() -> None:
         latter_ds = xarray.open_dataset(path + former_name.replace("former", "latter"))
         concatenated = xarray.concat([former_ds, latter_ds], dim="time")
         concat_name = former_name.replace("former-", "")
+        print(former_name)
         print(concat_name)
         concatenated.to_netcdf(POST_HEAT_OUTPUT_1920_1950_BASE + concat_name)
 
     path = POST_HEAT_OUTPUT_1920_1950_BASE + "split/"
     file_names = os.listdir(path)
     file_names = [name for name in file_names if 'former' in name]
+    tmp = []
+    for name in file_names:
+        if not os.path.isfile(POST_HEAT_OUTPUT_1920_1950_BASE + name.replace("former-", "")):
+            tmp.append(name)
+    file_names = tmp
+
+    print(f"{len(file_names)} missing netCDF files")
 
     processes = []
 
@@ -419,6 +418,8 @@ def concatenate_ensemble_members_heat_outputs() -> None:
                 process.join()
     for process in processes:
         process.join()
+
+concatenate_ensemble_members_heat_outputs()
 
 
 def output_heat_maps(variable:str, past_begin: str, past_end: str, fut_begin: str, fut_end: str, out_dir: str) -> None:
@@ -558,7 +559,161 @@ def output_heat_signal_isolating_maps(variable: str, exp_num: str, time_begin: s
     plt.savefig(f"{out_dir}/exp-{exp_num}-signal_isolation-{time_begin}-{time_end}.png")
 
 
-output_heat_signal_isolating_maps("HWF", "3336", "1960", "1990", FIGURE_IMAGE_OUTPUT)
-output_heat_signal_isolating_maps("HWF", "3336", "1990", "2020", FIGURE_IMAGE_OUTPUT)
-output_heat_signal_isolating_maps("HWF", "3336", "2020", "2050", FIGURE_IMAGE_OUTPUT)
-output_heat_signal_isolating_maps("HWF", "3336", "2050", "2080", FIGURE_IMAGE_OUTPUT)
+# output_heat_signal_isolating_maps("HWF", "3336", "1960", "1990", FIGURE_IMAGE_OUTPUT)
+# output_heat_signal_isolating_maps("HWF", "3336", "1990", "2020", FIGURE_IMAGE_OUTPUT)
+# output_heat_signal_isolating_maps("HWF", "3336", "2020", "2050", FIGURE_IMAGE_OUTPUT)
+# output_heat_signal_isolating_maps("HWF", "3336", "2050", "2080", FIGURE_IMAGE_OUTPUT)
+
+def spaghetti(variable: str, exp: str, out_dir: str) -> None:
+    dataset_names = listdir(POST_HEAT_OUTPUT_1920_1950_BASE)
+    heat_out_max_xaer_datasets = [name for name in dataset_names if 'XAER' in name and 'tx' in name and exp in name]
+    heat_out_max_xghg_datasets = [name for name in dataset_names if 'XGHG' in name and 'tx' in name and exp in name]
+    heat_out_max_all_datasets = [name for name in dataset_names if 'ALL' in name and 'tx' in name and exp in name]
+
+    heat_out_min_xaer_datasets = [name for name in dataset_names if 'XAER' in name and 'tn' in name and exp in name]
+    heat_out_min_xghg_datasets = [name for name in dataset_names if 'XGHG' in name and 'tn' in name and exp in name]
+    heat_out_min_all_datasets = [name for name in dataset_names if 'ALL' in name and 'tn' in name and exp in name]
+
+    datasets_labels = [(heat_out_max_all_datasets, "max. ALL"), (heat_out_min_all_datasets, "min. ALL"),
+                       (heat_out_max_xaer_datasets, "max. XAER"), (heat_out_min_xaer_datasets, "min. XAER"),
+                       (heat_out_max_xghg_datasets, "max. XGHG"), (heat_out_min_xghg_datasets, "min. XGHG")]
+
+    font = {'family': 'normal',
+            'weight': 'bold',
+            'size': 22}
+    rc('font', **font)
+    f, (ax_max, ax_min) = plt.subplots(2, 1, figsize=(15, 13))
+    f.suptitle(f"Raw Value Time Series Data",
+               fontsize=26)
+    for ds_names, label in datasets_labels:
+        max_avg = None
+        min_avg = None
+        color = "red"
+        if "XGHG" in label:
+            color = "green"
+        elif "XAER" in label:
+            color = "blue"
+        for ds_name in ds_names:
+            print(ds_name)
+            data = xarray.open_dataset(POST_HEAT_OUTPUT_1920_1950_BASE + ds_name)
+            if "max" in label:
+                data = data[f"{variable}_tx9pct"].mean(dim="lat").mean(dim="lon").dt.days
+                if max_avg is None:
+                    max_avg = data
+                else:
+                    max_avg += data
+                data.plot(ax=ax_max, color=color, alpha=0.2)
+            else:
+                data = data[f"{variable}_tn9pct"].mean(dim="lat").mean(dim="lon").dt.days
+                if min_avg is None:
+                    min_avg = data
+                else:
+                    min_avg += data
+                data.plot(ax=ax_min, color=color, alpha=0.2)
+        if max_avg is not None:
+            max_avg = max_avg / len(ds_names)
+            max_avg.plot(ax=ax_max, color=color, label=label)
+        if min_avg is not None:
+            min_avg = min_avg / len(ds_names)
+            min_avg.plot(ax=ax_min, color=color, label=label)
+    ax_max.set_title(f"{variable} MAX. EXP {exp}")
+    ax_max.legend(loc="upper left")
+    ax_min.set_title(f"{variable} MIN. EXP {exp}")
+    ax_min.legend(loc="upper left")
+    plt.tight_layout()
+    plt.savefig(f"{out_dir}/exp-{exp}-spaghetti.png")
+
+
+#spaghetti("HWF", "3314", FIGURE_IMAGE_OUTPUT)
+
+def aldente_spaghetti_differences(variable: str, exp: str, out_dir: str) -> None:
+    dataset_names = listdir(POST_HEAT_OUTPUT_1920_1950_BASE)
+    heat_out_max_xaer_datasets = [name for name in dataset_names if 'XAER' in name and 'tx' in name and exp in name]
+    heat_out_max_xghg_datasets = [name for name in dataset_names if 'XGHG' in name and 'tx' in name and exp in name]
+    heat_out_max_all_datasets = [name for name in dataset_names if 'ALL' in name and 'tx' in name and exp in name]
+
+    heat_out_min_xaer_datasets = [name for name in dataset_names if 'XAER' in name and 'tn' in name and exp in name]
+    heat_out_min_xghg_datasets = [name for name in dataset_names if 'XGHG' in name and 'tn' in name and exp in name]
+    heat_out_min_all_datasets = [name for name in dataset_names if 'ALL' in name and 'tn' in name and exp in name]
+
+    print(f"{len(heat_out_max_xaer_datasets)} {len(heat_out_min_xaer_datasets)} \n {len(heat_out_min_xghg_datasets)} "
+          f"{len(heat_out_max_xghg_datasets)} \n {len(heat_out_min_all_datasets)} {len(heat_out_max_all_datasets)}")
+
+    datasets_labels = [(heat_out_max_xaer_datasets, "max. AER"), (heat_out_min_xaer_datasets, "min. AER"),
+                       (heat_out_max_xghg_datasets, "max. GHG"), (heat_out_min_xghg_datasets, "min. GHG")]
+
+    font = {'family': 'normal',
+            'weight': 'bold',
+            'size': 22}
+    rc('font', **font)
+    f, (ax_max, ax_min) = plt.subplots(2, 1, figsize=(15, 13))
+    f.suptitle(f"Isolated Signal Time Series Data",
+               fontsize=26)
+
+    all_max_avg = None
+    for ds_name in heat_out_max_all_datasets:
+        print(ds_name)
+        data = xarray.open_dataset(POST_HEAT_OUTPUT_1920_1950_BASE + ds_name)
+        data = data[f"{variable}_tx9pct"].mean(dim="lat").mean(dim="lon").dt.days
+        data.plot(ax=ax_max, color="red", alpha=0.2)
+        if all_max_avg is None:
+            all_max_avg = data
+        else:
+            all_max_avg += data
+    all_max_avg = all_max_avg / len(heat_out_max_all_datasets)
+    all_max_avg.plot(ax=ax_max, color="red", label="max. ALL")
+
+    all_min_avg = None
+    for ds_name in heat_out_min_all_datasets:
+        print(ds_name)
+        data = xarray.open_dataset(POST_HEAT_OUTPUT_1920_1950_BASE + ds_name)
+        data = data[f"{variable}_tn9pct"].mean(dim="lat").mean(dim="lon").dt.days
+        data.plot(ax=ax_min, color="red", alpha=0.2)
+        if all_min_avg is None:
+            all_min_avg = data
+        else:
+            all_min_avg += data
+    all_min_avg = all_min_avg / len(heat_out_min_all_datasets)
+    all_min_avg.plot(ax=ax_min, color="red", label="min. ALL")
+
+    for ds_names, label in datasets_labels:
+        max_avg = None
+        min_avg = None
+        color = "red"
+        if "GHG" in label:
+            color = "green"
+        elif "AER" in label:
+            color = "blue"
+        for ds_name in ds_names:
+            print(ds_name)
+            data = xarray.open_dataset(POST_HEAT_OUTPUT_1920_1950_BASE + ds_name)
+            if "max" in label:
+                data = all_max_avg - data[f"{variable}_tx9pct"].mean(dim="lat").mean(dim="lon").dt.days
+                if max_avg is None:
+                    max_avg = data
+                else:
+                    max_avg += data
+                data.plot(ax=ax_max, color=color, alpha=0.2)
+            else:
+                data = all_min_avg - data[f"{variable}_tn9pct"].mean(dim="lat").mean(dim="lon").dt.days
+                if min_avg is None:
+                    min_avg = data
+                else:
+                    min_avg += data
+                data.plot(ax=ax_min, color=color, alpha=0.2)
+
+        if max_avg is not None:
+            max_avg = max_avg / len(ds_names)
+            max_avg.plot(ax=ax_max, color=color, label=label)
+        if min_avg is not None:
+            min_avg = min_avg / len(ds_names)
+            min_avg.plot(ax=ax_min, color=color, label=label)
+    ax_max.set_title(f"{variable} MAX. EXP {exp}")
+    ax_max.legend(loc="upper left")
+    ax_min.set_title(f"{variable} MIN. EXP {exp}")
+    ax_min.legend(loc="upper left")
+    plt.tight_layout()
+    plt.savefig(f"{out_dir}/exp-{exp}-aldente-spaghetti-differences.png")
+
+
+#aldente_spaghetti_differences("HWF", "3314", FIGURE_IMAGE_OUTPUT)
