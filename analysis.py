@@ -2,7 +2,7 @@ import os
 import cartopy.crs as ccrs
 from settings import RESAMPLED_YEARLY_AVG, SAMPLE_NC, POST_OUT_EM_AVGS_1920_1950, \
     POST_HEAT_THRESHOLDS_1920_TO_1950, DATA_DIR, POST_HEAT_OUTPUT_1920_1950_BASE, \
-    MERRA2_DATA
+    MERRA2_DATA, FIGURE_IMAGE_OUTPUT
 import xarray
 import numpy as np
 import matplotlib.pyplot as plt
@@ -13,6 +13,8 @@ import imageio
 from uuid import uuid4
 from multiprocessing import Process, Queue
 import preprocessing as pp
+from textwrap import wrap
+from matplotlib.backends.backend_pdf import PdfPages
 
 load_datasets = False
 if load_datasets:
@@ -419,11 +421,10 @@ def concatenate_ensemble_members_heat_outputs() -> None:
     for process in processes:
         process.join()
 
-concatenate_ensemble_members_heat_outputs()
 
-
-def output_heat_maps(variable:str, past_begin: str, past_end: str, fut_begin: str, fut_end: str, out_dir: str) -> None:
-    exp_nums = ["3336"]#, "3314", "3236", "3214", "3136", "3114"]
+def output_heat_maps(variable:str, past_begin: str, past_end: str, fut_begin: str, fut_end: str,
+                     out_dir: str, pdf=None) -> None:
+    exp_nums = ["3336", "3314", "3236", "3214", "3136", "3114"]
     simulations = ["ALL", "XGHG", "XAER"]
     variants = [("min", "tn9pct"), ("max", "tx9pct")]
     for exp_num in exp_nums:
@@ -452,17 +453,14 @@ def output_heat_maps(variable:str, past_begin: str, past_end: str, fut_begin: st
                 iindex += 1
             index += 1
 
-        plt.tight_layout()
-        plt.savefig(f"{out_dir}/exp-{exp_num}-{past_begin}-{past_end}--{fut_begin}-{fut_end}.png")
+        f.tight_layout()
+        if pdf is None:
+            f.savefig(f"{out_dir}/exp-{exp_num}-{past_begin}-{past_end}--{fut_begin}-{fut_end}.png")
+        else:
+            pdf.savefig(f)
 
 
-FIGURE_IMAGE_OUTPUT = "/home/persad_users/csc3323/figure_outputs"
-# output_heat_maps("HWF", "1920", "1950", "2050", "2080", FIGURE_IMAGE_OUTPUT)
-# output_heat_maps("HWF", "1920", "1950", "1970", "2000", FIGURE_IMAGE_OUTPUT)
-# output_heat_maps("HWF", "1960", "1960", "1980", "1980", FIGURE_IMAGE_OUTPUT)
-
-
-def output_merra2_maps(exp_num: str, out_dir: str) -> None:
+def output_merra2_maps(exp_num: str, out_dir: str, pdf=None) -> None:
     merra2_min = xarray.open_dataset(MERRA2_DATA + f"tn90pct_heatwaves_MERRA_r0_{exp_num}_yearly_summer.nc")\
         .AHWF_tn90pct.mean(dim="time").dt.days
     merra2_max = xarray.open_dataset(MERRA2_DATA + f"tx90pct_heatwaves_MERRA_r0_{exp_num}_yearly_summer.nc")\
@@ -507,12 +505,15 @@ def output_merra2_maps(exp_num: str, out_dir: str) -> None:
     ax6.coastlines()
     (ensemble_max_avg - merra2_max).plot(ax=ax6)
 
-    plt.tight_layout()
-    plt.savefig(f"{out_dir}/exp-{exp_num}-MERRA2-comparison.png")
+    f.tight_layout()
+    if pdf is None:
+        f.savefig(f"{out_dir}/exp-{exp_num}-MERRA2-comparison.png")
+    else:
+        pdf.savefig(f)
 
 
 def output_heat_signal_isolating_maps(variable: str, exp_num: str, time_begin: str, time_end: str,
-                                      out_dir: str) -> None:
+                                      out_dir: str, pdf=None) -> None:
     variants = [("min", "tn9pct"), ("max", "tx9pct")]
     f, axis = plt.subplots(2, 3, figsize=(35, 13), subplot_kw=dict(projection=ccrs.PlateCarree()))
     f.suptitle(f"{variable} EXP:{exp_num} | AVG:{time_begin}-{time_end} Abs. Value",
@@ -541,30 +542,30 @@ def output_heat_signal_isolating_maps(variable: str, exp_num: str, time_begin: s
                 xghg_ds = xghg_ds.sel(time=(time_begin, time_end)).mean(dim="time").dt.days
                 data_plot = all_ds - xghg_ds
                 data_plot.plot(ax=cell, cmap="seismic", norm=norm, vmax=vmax, vmin=vmin)
-                title = f"ALL - XGHG {variant}"
+                title = f"GHG {variant}"
             else:
                 xaer_ds = xarray.open_dataset(POST_OUT_EM_AVGS_1920_1950 + f"XAER-{variant}-{exp_num}.nc")
                 xaer_ds = xaer_ds[f"{variable}_{suffix}"]
                 xaer_ds = xaer_ds.sel(time=(time_begin, time_end)).mean(dim="time").dt.days
                 data_plot2 = all_ds - xaer_ds
                 data_plot2.plot(ax=cell, cmap="seismic", norm=norm, vmax=vmax, vmin=vmin)
-                title = f"ALL - XAER {variant}"
+                title = f"AER {variant}"
             print(f"{exp_num} {title}")
             cell.set_title(title)
             cell.coastlines()
             iindex += 1
         index += 1
+    text = f"The mean number of heat wave days that occur annually, averaged over the time frame {time_begin} to" \
+           f" {time_end}. The GHG and AER maps were calculated as ALL-XGHG and ALL-XAER respectively."
+    f.text(0.5, 0.005, text, ha='center')
+    f.tight_layout()
+    if pdf is None:
+        f.savefig(f"{out_dir}/exp-{exp_num}-signal_isolation-{time_begin}-{time_end}.png")
+    else:
+        pdf.savefig(f)
 
-    plt.tight_layout()
-    plt.savefig(f"{out_dir}/exp-{exp_num}-signal_isolation-{time_begin}-{time_end}.png")
 
-
-# output_heat_signal_isolating_maps("HWF", "3336", "1960", "1990", FIGURE_IMAGE_OUTPUT)
-# output_heat_signal_isolating_maps("HWF", "3336", "1990", "2020", FIGURE_IMAGE_OUTPUT)
-# output_heat_signal_isolating_maps("HWF", "3336", "2020", "2050", FIGURE_IMAGE_OUTPUT)
-# output_heat_signal_isolating_maps("HWF", "3336", "2050", "2080", FIGURE_IMAGE_OUTPUT)
-
-def spaghetti(variable: str, exp: str, out_dir: str) -> None:
+def spaghetti(variable: str, exp: str, out_dir: str, pdf=None) -> None:
     dataset_names = listdir(POST_HEAT_OUTPUT_1920_1950_BASE)
     heat_out_max_xaer_datasets = [name for name in dataset_names if 'XAER' in name and 'tx' in name and exp in name]
     heat_out_max_xghg_datasets = [name for name in dataset_names if 'XGHG' in name and 'tx' in name and exp in name]
@@ -620,13 +621,19 @@ def spaghetti(variable: str, exp: str, out_dir: str) -> None:
     ax_max.legend(loc="upper left")
     ax_min.set_title(f"{variable} MIN. EXP {exp}")
     ax_min.legend(loc="upper left")
-    plt.tight_layout()
-    plt.savefig(f"{out_dir}/exp-{exp}-spaghetti.png")
+
+    text = f"The number of heat wave days each year, thick line represents the mean value of all the ensemble members." \
+           f" Displayed are the raw values from the XGHG and XAER simulations."
+    f.text(0.5, 0.005, text, wrap=True, horizontalalignment='center', fontsize=12)
+
+    f.tight_layout()
+    if pdf is None:
+        f.savefig(f"{out_dir}/exp-{exp}-{variable}-spaghetti.png")
+    else:
+        pdf.savefig(f)
 
 
-#spaghetti("HWF", "3314", FIGURE_IMAGE_OUTPUT)
-
-def aldente_spaghetti_differences(variable: str, exp: str, out_dir: str) -> None:
+def aldente_spaghetti_differences(variable: str, exp: str, out_dir: str, pdf=None) -> None:
     dataset_names = listdir(POST_HEAT_OUTPUT_1920_1950_BASE)
     heat_out_max_xaer_datasets = [name for name in dataset_names if 'XAER' in name and 'tx' in name and exp in name]
     heat_out_max_xghg_datasets = [name for name in dataset_names if 'XGHG' in name and 'tx' in name and exp in name]
@@ -712,8 +719,62 @@ def aldente_spaghetti_differences(variable: str, exp: str, out_dir: str) -> None
     ax_max.legend(loc="upper left")
     ax_min.set_title(f"{variable} MIN. EXP {exp}")
     ax_min.legend(loc="upper left")
-    plt.tight_layout()
-    plt.savefig(f"{out_dir}/exp-{exp}-aldente-spaghetti-differences.png")
+
+    text = f"The number of heat wave days each year, thick line represents the mean value of all the ensemble members."\
+           f" GHG and AER were calculated from ALL-XGHG and ALL-XAER respectively. "
+
+    f.text(0.5, 0.005, text, wrap=True, horizontalalignment='center', fontsize=12)
+
+    f.tight_layout()
+    if pdf is None:
+        f.savefig(f"{out_dir}/exp-{exp}-{variable}-aldente-spaghetti-differences.png")
+    else:
+        pdf.savefig(f)
 
 
-#aldente_spaghetti_differences("HWF", "3314", FIGURE_IMAGE_OUTPUT)
+def generate_figure_images() -> None:
+    var_exp_list = [("HWF", "3336"),
+                    ("HWF", "3314"),
+                    ("HWF", "3236"),
+                    ("HWF", "3136"),
+                    ("HWF", "3114")]
+
+    time_ranges = [("1960", "1990"), ("1990", "2020"), ("2020", "2050"), ("2050", "2080")]
+
+    processes = []
+    with PdfPages('spaghetti.pdf') as pdf:
+        for variable, exp_num in var_exp_list:
+            proc = Process(target=spaghetti,
+                           args=(variable, exp_num, FIGURE_IMAGE_OUTPUT, pdf))
+            proc.daemon = True
+            proc.start()
+            processes.append(proc)
+        for process in processes:
+            process.join()
+
+    with PdfPages('aldente_spaghetti.pdf') as pdf:
+        for variable, exp_num in var_exp_list:
+            proc = Process(target=aldente_spaghetti_differences,
+                           args=(variable, exp_num, FIGURE_IMAGE_OUTPUT, pdf))
+            proc.daemon = True
+            proc.start()
+            processes.append(proc)
+        for process in processes:
+            process.join()
+
+    with PdfPages('heat_signal_isolating_maps.pdf') as pdf:
+        for t_b, t_e in time_ranges:
+            processes = []
+            for variable, exp_num in var_exp_list:
+                proc = Process(target=output_heat_signal_isolating_maps,
+                               args=(variable, exp_num, t_b, t_e, FIGURE_IMAGE_OUTPUT, pdf))
+                proc.daemon = True
+                proc.start()
+                processes.append(proc)
+            for process in processes:
+                process.join()
+
+
+generate_figure_images()
+
+# images = [f"{FIGURE_IMAGE_OUTPUT}{name}" for name in os.listdir(FIGURE_IMAGE_OUTPUT) if '.png' in name]
