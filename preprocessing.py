@@ -1,4 +1,4 @@
-from settings import DATA_DIR, RESAMPLED_YEARLY_AVG, TIME_SLICED_1920_TO_1950
+from settings import DATA_DIR, RESAMPLED_YEARLY_AVG, TIME_SLICED_1920_TO_1950, CONCATENATED_DATA
 import xarray
 from os import listdir
 from multiprocessing import Process
@@ -175,3 +175,46 @@ def slice_former_ensemble_datasets(start_date: str, end_date: str, output_dir: s
 
     for process in processes:
         process.join()
+
+
+def concatenate_data() -> None:
+    processes = []
+
+    former_latter_pairs = [(trefht_all_former_em, trefht_all_latter_em, "trefht_all"),
+                           (trefhtmin_all_former_em, trefhtmin_all_latter_em, "trefhtmin_all"),
+                           (trefhtmax_all_former_em, trefhtmax_all_latter_em, "trefhtmax_all"),
+                           (trefht_xaer_former_em, trefht_xaer_latter_em, "trefht_xaer.nc"),
+                           (trefhtmin_xaer_former_em, trefhtmin_xaer_latter_em, "trefhtmin_xaer"),
+                           (trefhtmax_xaer_former_em, trefhtmax_xaer_latter_em, "trefhtmax_xaer"),
+                           (trefht_xghg_former_em, trefht_xghg_latter_em, "trefht_xghg.nc"),
+                           (trefhtmin_xghg_former_em, trefhtmin_xghg_latter_em, "trefhtmin_xghg"),
+                           (trefhtmax_xghg_former_em, trefhtmax_xghg_latter_em, "trefhtmax_xghg")]
+    num_processes = 0
+
+    for former_em, latter_em, label in former_latter_pairs:
+        former_em.sort()
+        latter_em.sort()
+
+        def func(former_, latter_, label_) -> None:
+            concat_data = xarray.open_mfdataset([DATA_DIR + former, DATA_DIR + latter], concat_dim="time",
+                                                chunks={'lat': 10, 'lon': 10}, parallel=True)
+            concat_data.to_netcdf(CONCATENATED_DATA + f"{label_}_{index}.nc")
+
+        for index, former in enumerate(former_em):
+            print(f"{label} {index}")
+            latter = latter_em[index]
+            proc = Process(target=func, args=(former, latter, label,))
+            proc.daemon = True
+            proc.start()
+            processes.append(proc)
+            num_processes += 1
+            if num_processes > 10:
+                for process in processes:
+                    process.join()
+                num_processes = 0
+    for process in processes:
+        process.join()
+
+
+
+concatenate_data()
