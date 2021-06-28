@@ -197,7 +197,7 @@ def concatenate_data() -> None:
 
         def func(former_, latter_, label_) -> None:
             concat_data = xarray.open_mfdataset([DATA_DIR + former, DATA_DIR + latter], concat_dim="time",
-                                                chunks={'lat': 10, 'lon': 10}, parallel=True)
+                                                chunks={'time': 50}, parallel=True)
             concat_data.to_netcdf(CONCATENATED_DATA + f"{label_}_{index}.nc")
 
         for index, former in enumerate(former_em):
@@ -208,13 +208,12 @@ def concatenate_data() -> None:
             proc.start()
             processes.append(proc)
             num_processes += 1
-            if num_processes > 10:
+            if num_processes > 3:
                 for process in processes:
                     process.join()
                 num_processes = 0
     for process in processes:
         process.join()
-
 
 
 concatenate_data()
