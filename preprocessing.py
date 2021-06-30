@@ -1,6 +1,8 @@
+import os.path
+
 from settings import DATA_DIR, RESAMPLED_YEARLY_AVG, TIME_SLICED_1920_TO_1950, CONCATENATED_DATA
 import xarray
-from os import listdir
+from os import listdir, system
 from multiprocessing import Process
 
 # Group datasets in directory by variable, type, and former/latter half of the time series
@@ -183,10 +185,10 @@ def concatenate_data() -> None:
     former_latter_pairs = [(trefht_all_former_em, trefht_all_latter_em, "trefht_all"),
                            (trefhtmin_all_former_em, trefhtmin_all_latter_em, "trefhtmin_all"),
                            (trefhtmax_all_former_em, trefhtmax_all_latter_em, "trefhtmax_all"),
-                           (trefht_xaer_former_em, trefht_xaer_latter_em, "trefht_xaer.nc"),
+                           (trefht_xaer_former_em, trefht_xaer_latter_em, "trefht_xaer"),
                            (trefhtmin_xaer_former_em, trefhtmin_xaer_latter_em, "trefhtmin_xaer"),
                            (trefhtmax_xaer_former_em, trefhtmax_xaer_latter_em, "trefhtmax_xaer"),
-                           (trefht_xghg_former_em, trefht_xghg_latter_em, "trefht_xghg.nc"),
+                           (trefht_xghg_former_em, trefht_xghg_latter_em, "trefht_xghg"),
                            (trefhtmin_xghg_former_em, trefhtmin_xghg_latter_em, "trefhtmin_xghg"),
                            (trefhtmax_xghg_former_em, trefhtmax_xghg_latter_em, "trefhtmax_xghg")]
     num_processes = 0
@@ -196,9 +198,15 @@ def concatenate_data() -> None:
         latter_em.sort()
 
         def func(former_, latter_, label_) -> None:
-            concat_data = xarray.open_mfdataset([DATA_DIR + former, DATA_DIR + latter], concat_dim="time",
-                                                chunks={'time': 50}, parallel=True)
-            concat_data.to_netcdf(CONCATENATED_DATA + f"{label_}_{index}.nc")
+            output_path = CONCATENATED_DATA + f"{label_}_{index}.nc"
+            if not os.path.isfile(output_path):
+                print(output_path)
+                system(f"ncrcat -h {DATA_DIR + former_} {DATA_DIR + latter_} {output_path}")
+            else:
+                print(f"File already exists: {output_path}")
+            # concat_data = xarray.open_mfdataset([DATA_DIR + former, DATA_DIR + latter], concat_dim="time",
+            #                                     chunks={'time': 50}, parallel=True)
+            # concat_data.to_netcdf(CONCATENATED_DATA + f"{label_}_{index}.nc")
 
         for index, former in enumerate(former_em):
             print(f"{label} {index}")
@@ -208,12 +216,9 @@ def concatenate_data() -> None:
             proc.start()
             processes.append(proc)
             num_processes += 1
-            if num_processes > 3:
+            if num_processes > 20:
                 for process in processes:
                     process.join()
                 num_processes = 0
     for process in processes:
         process.join()
-
-
-concatenate_data()

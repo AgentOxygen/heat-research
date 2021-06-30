@@ -612,7 +612,7 @@ def save_yearly(HWN, HWF, HWD, CHWN, CHWF, CHWD, AHWN, AHWF, AHWD, AHW1N, AHW1F,
     setattr(olon, 'long_name', 'Longitude')
     setattr(olon, 'units', 'degrees_east')
     setattr(olon, 'axis', 'X')
-    otpct = yearlyout.createVariable('%s%spct'%(basedat,str(pcntl).rstrip('0').rstrip('.')), 'f8', 
+    otpct = yearlyout.createVariable('%s%spct'%(basedat,str(pcntl).rstrip('.')), 'f8',
 	    ('day','lat','lon'), fill_value=-999.99)
     setattr(otpct, 'long_name', '%s %sth percentile'%(basedat,str(pcntl).rstrip('.')))
     setattr(otpct, 'units', 'degC')
@@ -757,6 +757,8 @@ def save_yearly(HWN, HWF, HWD, CHWN, CHWF, CHWD, AHWN, AHWF, AHWD, AHW1N, AHW1F,
         AHW2Dout[:] = AHW2D.reshape((nyears,)+space)
     yearlyout.close()
 
+save_yearly(HWN_tx,HWF_tx,HWD_tx,CHWN_tx,CHWF_tx,CHWD_tx,AHWN_tx,AHWF_tx,AHWD_tx,AHW1N_tx,AHW1F_tx,AHW1D_tx,AHW2F_tx,AHW2D_tx,'tx%spct'%(str(pcntl).rstrip('.')),'tx')
+save_yearly(HWN_tn,HWF_tn,HWD_tn,CHWN_tn,CHWF_tn,CHWD_tn,AHWN_tn,AHWF_tn,AHWD_tn,AHW1N_tn,AHW1F_tn,AHW1D_tn,AHW2F_tn,AHW2D_tn,'tn%spct'%(str(pcntl).rstrip('.')),'tn')
 
 ###########DEFINTION-el3-bmax3-e2l3-dm6####################
 #def definition_el3_bmax3_e2l3_dm6() -> None:
@@ -800,8 +802,8 @@ try:
     experiment = str(elength).rstrip('0').rstrip('.')+str(bmax).rstrip('0').rstrip('.')+str(e2length).rstrip('0').rstrip('.')+str(dmin).rstrip('0').rstrip('.')
 except AttributeError:
     experiment = ''
-save_yearly(HWN_tx,HWF_tx,HWD_tx,CHWN_tx,CHWF_tx,CHWD_tx,AHWN_tx,AHWF_tx,AHWD_tx,AHW1N_tx,AHW1F_tx,AHW1D_tx,AHW2F_tx,AHW2D_tx,'tx%spct'%(str(pcntl).rstrip('0').rstrip('.')),'tx')
-save_yearly(HWN_tn,HWF_tn,HWD_tn,CHWN_tn,CHWF_tn,CHWD_tn,AHWN_tn,AHWF_tn,AHWD_tn,AHW1N_tn,AHW1F_tn,AHW1D_tn,AHW2F_tn,AHW2D_tn,'tn%spct'%(str(pcntl).rstrip('0').rstrip('.')),'tn')
+save_yearly(HWN_tx,HWF_tx,HWD_tx,CHWN_tx,CHWF_tx,CHWD_tx,AHWN_tx,AHWF_tx,AHWD_tx,AHW1N_tx,AHW1F_tx,AHW1D_tx,AHW2F_tx,AHW2D_tx,'tx%spct'%(str(pcntl).rstrip('.')),'tx')
+save_yearly(HWN_tn,HWF_tn,HWD_tn,CHWN_tn,CHWF_tn,CHWD_tn,AHWN_tn,AHWF_tn,AHWD_tn,AHW1N_tn,AHW1F_tn,AHW1D_tn,AHW2F_tn,AHW2D_tn,'tn%spct'%(str(pcntl).rstrip('.')),'tn')
 
 
 ###########DEFINTION-el3-bmax2-e2l3-dm6####################
@@ -823,8 +825,8 @@ try:
     experiment = str(elength).rstrip('0').rstrip('.')+str(bmax).rstrip('0').rstrip('.')+str(e2length).rstrip('0').rstrip('.')+str(dmin).rstrip('0').rstrip('.')
 except AttributeError:
     experiment = ''
-save_yearly(HWN_tx,HWF_tx,HWD_tx,CHWN_tx,CHWF_tx,CHWD_tx,AHWN_tx,AHWF_tx,AHWD_tx,AHW1N_tx,AHW1F_tx,AHW1D_tx,AHW2F_tx,AHW2D_tx,'tx%spct'%(str(pcntl).rstrip('0').rstrip('.')),'tx')
-save_yearly(HWN_tn,HWF_tn,HWD_tn,CHWN_tn,CHWF_tn,CHWD_tn,AHWN_tn,AHWF_tn,AHWD_tn,AHW1N_tn,AHW1F_tn,AHW1D_tn,AHW2F_tn,AHW2D_tn,'tn%spct'%(str(pcntl).rstrip('0').rstrip('.')),'tn')
+save_yearly(HWN_tx,HWF_tx,HWD_tx,CHWN_tx,CHWF_tx,CHWD_tx,AHWN_tx,AHWF_tx,AHWD_tx,AHW1N_tx,AHW1F_tx,AHW1D_tx,AHW2F_tx,AHW2D_tx,'tx%spct'%(str(pcntl).rstrip('.')),'tx')
+save_yearly(HWN_tn,HWF_tn,HWD_tn,CHWN_tn,CHWF_tn,CHWD_tn,AHWN_tn,AHWF_tn,AHWD_tn,AHW1N_tn,AHW1F_tn,AHW1D_tn,AHW2F_tn,AHW2D_tn,'tn%spct'%(str(pcntl).rstrip('.')),'tn')
 
 
 ###########DEFINTION-el3-bmax2-e2l1-dm4####################
@@ -846,8 +848,8 @@ try:
     experiment = str(elength).rstrip('0').rstrip('.')+str(bmax).rstrip('0').rstrip('.')+str(e2length).rstrip('0').rstrip('.')+str(dmin).rstrip('0').rstrip('.')
 except AttributeError:
     experiment = ''
-save_yearly(HWN_tx,HWF_tx,HWD_tx,CHWN_tx,CHWF_tx,CHWD_tx,AHWN_tx,AHWF_tx,AHWD_tx,AHW1N_tx,AHW1F_tx,AHW1D_tx,AHW2F_tx,AHW2D_tx,'tx%spct'%(str(pcntl).rstrip('0').rstrip('.')),'tx')
-save_yearly(HWN_tn,HWF_tn,HWD_tn,CHWN_tn,CHWF_tn,CHWD_tn,AHWN_tn,AHWF_tn,AHWD_tn,AHW1N_tn,AHW1F_tn,AHW1D_tn,AHW2F_tn,AHW2D_tn,'tn%spct'%(str(pcntl).rstrip('0').rstrip('.')),'tn')
+save_yearly(HWN_tx,HWF_tx,HWD_tx,CHWN_tx,CHWF_tx,CHWD_tx,AHWN_tx,AHWF_tx,AHWD_tx,AHW1N_tx,AHW1F_tx,AHW1D_tx,AHW2F_tx,AHW2D_tx,'tx%spct'%(str(pcntl).rstrip('.')),'tx')
+save_yearly(HWN_tn,HWF_tn,HWD_tn,CHWN_tn,CHWF_tn,CHWD_tn,AHWN_tn,AHWF_tn,AHWD_tn,AHW1N_tn,AHW1F_tn,AHW1D_tn,AHW2F_tn,AHW2D_tn,'tn%spct'%(str(pcntl).rstrip('.')),'tn')
 
 
 ###########DEFINTION-el3-bmax1-e2l3-dm6####################
@@ -869,8 +871,8 @@ try:
     experiment = str(elength).rstrip('0').rstrip('.')+str(bmax).rstrip('0').rstrip('.')+str(e2length).rstrip('0').rstrip('.')+str(dmin).rstrip('0').rstrip('.')
 except AttributeError:
     experiment = ''
-save_yearly(HWN_tx,HWF_tx,HWD_tx,CHWN_tx,CHWF_tx,CHWD_tx,AHWN_tx,AHWF_tx,AHWD_tx,AHW1N_tx,AHW1F_tx,AHW1D_tx,AHW2F_tx,AHW2D_tx,'tx%spct'%(str(pcntl).rstrip('0').rstrip('.')),'tx')
-save_yearly(HWN_tn,HWF_tn,HWD_tn,CHWN_tn,CHWF_tn,CHWD_tn,AHWN_tn,AHWF_tn,AHWD_tn,AHW1N_tn,AHW1F_tn,AHW1D_tn,AHW2F_tn,AHW2D_tn,'tn%spct'%(str(pcntl).rstrip('0').rstrip('.')),'tn')
+save_yearly(HWN_tx,HWF_tx,HWD_tx,CHWN_tx,CHWF_tx,CHWD_tx,AHWN_tx,AHWF_tx,AHWD_tx,AHW1N_tx,AHW1F_tx,AHW1D_tx,AHW2F_tx,AHW2D_tx,'tx%spct'%(str(pcntl).rstrip('.')),'tx')
+save_yearly(HWN_tn,HWF_tn,HWD_tn,CHWN_tn,CHWF_tn,CHWD_tn,AHWN_tn,AHWF_tn,AHWD_tn,AHW1N_tn,AHW1F_tn,AHW1D_tn,AHW2F_tn,AHW2D_tn,'tn%spct'%(str(pcntl).rstrip('.')),'tn')
 
 
 ###########DEFINTION-el3-bmax1-e2l1-dm4####################
@@ -892,8 +894,8 @@ try:
     experiment = str(elength).rstrip('0').rstrip('.')+str(bmax).rstrip('0').rstrip('.')+str(e2length).rstrip('0').rstrip('.')+str(dmin).rstrip('0').rstrip('.')
 except AttributeError:
     experiment = ''
-save_yearly(HWN_tx,HWF_tx,HWD_tx,CHWN_tx,CHWF_tx,CHWD_tx,AHWN_tx,AHWF_tx,AHWD_tx,AHW1N_tx,AHW1F_tx,AHW1D_tx,AHW2F_tx,AHW2D_tx,'tx%spct'%(str(pcntl).rstrip('0').rstrip('.')),'tx')
-save_yearly(HWN_tn,HWF_tn,HWD_tn,CHWN_tn,CHWF_tn,CHWD_tn,AHWN_tn,AHWF_tn,AHWD_tn,AHW1N_tn,AHW1F_tn,AHW1D_tn,AHW2F_tn,AHW2D_tn,'tn%spct'%(str(pcntl).rstrip('0').rstrip('.')),'tn')
+save_yearly(HWN_tx,HWF_tx,HWD_tx,CHWN_tx,CHWF_tx,CHWD_tx,AHWN_tx,AHWF_tx,AHWD_tx,AHW1N_tx,AHW1F_tx,AHW1D_tx,AHW2F_tx,AHW2D_tx,'tx%spct'%(str(pcntl).rstrip('.')),'tx')
+save_yearly(HWN_tn,HWF_tn,HWD_tn,CHWN_tn,CHWF_tn,CHWD_tn,AHWN_tn,AHWF_tn,AHWD_tn,AHW1N_tn,AHW1F_tn,AHW1D_tn,AHW2F_tn,AHW2D_tn,'tn%spct'%(str(pcntl).rstrip('.')),'tn')
 
 
 # definition_el3_bmax3_e2l3_dm6()

@@ -2,7 +2,7 @@ import os
 import cartopy.crs as ccrs
 from settings import RESAMPLED_YEARLY_AVG, SAMPLE_NC, POST_OUT_EM_AVGS_1920_1950, \
     POST_HEAT_THRESHOLDS_1920_TO_1950, DATA_DIR, POST_HEAT_OUTPUT_1920_1950_BASE, \
-    MERRA2_DATA, FIGURE_IMAGE_OUTPUT
+    MERRA2_DATA, FIGURE_IMAGE_OUTPUT, CONCATENATED_DATA, POST_HEAT_OUTPUT_CONCAT_1920_1950_BASE
 import xarray
 import numpy as np
 import matplotlib.pyplot as plt
@@ -12,11 +12,13 @@ from os import listdir, remove, system
 import imageio
 from uuid import uuid4
 from multiprocessing import Process, Queue
-import preprocessing as pp
 from textwrap import wrap
 from matplotlib.backends.backend_pdf import PdfPages
+from scipy import ndimage
+import preprocessing as pp
 
-load_datasets = False
+load_datasets = True
+load_datasets = True
 if load_datasets:
     dataset_names = listdir(RESAMPLED_YEARLY_AVG)
     xaer_datasets = [name for name in dataset_names if 'XAER' in name]
@@ -299,28 +301,31 @@ def process_heat_thresholds_1920_1950() -> None:
 
 def calculate_heat_metrics_1920_1950_baseline() -> None:
     processes = []
-    ensemble_members = [(pp.trefhtmax_xghg_former_em, pp.trefhtmin_xghg_former_em,
-                         threshold_xghg_datasets, "former-XGHG"),
-                        (pp.trefhtmax_xaer_former_em, pp.trefhtmin_xaer_former_em,
-                         threshold_xaer_datasets, "former-XAER"),
-                        (pp.trefhtmax_all_former_em, pp.trefhtmin_all_former_em,
-                         threshold_all_datasets, "former-ALL"),
-                        (pp.trefhtmax_xghg_latter_em, pp.trefhtmin_xghg_latter_em,
-                         threshold_xghg_datasets, "latter-XGHG"),
-                        (pp.trefhtmax_xaer_latter_em, pp.trefhtmin_xaer_latter_em,
-                         threshold_xaer_datasets, "latter-XAER"),
-                        (pp.trefhtmax_all_latter_em, pp.trefhtmin_all_latter_em,
-                         threshold_all_datasets, "latter-ALL")]
+
+    datasets = listdir(CONCATENATED_DATA)
+    trefhtmax_xghg_em = [name for name in datasets if "trefhtmax_xghg" in name]
+    trefhtmin_xghg_em = [name for name in datasets if "trefhtmin_xghg" in name]
+    trefhtmax_xaer_em = [name for name in datasets if "trefhtmax_xaer" in name]
+    trefhtmin_xaer_em = [name for name in datasets if "trefhtmin_xaer" in name]
+    trefhtmax_all_em = [name for name in datasets if "trefhtmax_all" in name]
+    trefhtmin_all_em = [name for name in datasets if "trefhtmin_all" in name]
+
+    ensemble_members = [(trefhtmax_xghg_em, trefhtmin_xghg_em,
+                         threshold_xghg_datasets, "XGHG"),
+                        (trefhtmax_xaer_em, trefhtmin_xaer_em,
+                         threshold_xaer_datasets, "XAER"),
+                        (trefhtmax_all_em, trefhtmin_all_em,
+                         threshold_all_datasets, "ALL")]
     for max_em, min_em, threshold_em, label in ensemble_members:
         for index, max_former_path in enumerate(max_em):
-            max_ds_path = DATA_DIR + max_former_path
-            min_ds_path = DATA_DIR + min_em[index]
+            max_ds_path = CONCATENATED_DATA + max_former_path
+            min_ds_path = CONCATENATED_DATA + min_em[index]
             th_path = POST_HEAT_THRESHOLDS_1920_TO_1950 + threshold_em[index]
             print(max_ds_path)
             print(min_ds_path)
             proc = Process(target=system,
                            args=(f'python3 ehfheatwaves_compound_inputthres_3.py -x {max_ds_path} -n {min_ds_path}'
-                                 + f' --change_dir {POST_HEAT_OUTPUT_1920_1950_BASE + "split/"}{label}-{index}- --thres {th_path}'
+                                 + f' --change_dir {POST_HEAT_OUTPUT_CONCAT_1920_1950_BASE + "split/"}{label}-{index}- --thres {th_path}'
                                  + f' --base=1920-1950 -d CESM2 --vnamex TREFHTMX --vnamen TREFHTMN',))
             proc.daemon = True
             proc.start()
@@ -332,6 +337,8 @@ def calculate_heat_metrics_1920_1950_baseline() -> None:
         for process in processes:
             process.join()
 
+
+calculate_heat_metrics_1920_1950_baseline()
 
 def average_heat_outputs() -> None:
     def process_ds(label_: str, exp_num_: str, latter_datasets_: list, former_datasets_: list) -> None:
@@ -473,55 +480,48 @@ def output_merra2_maps(exp_num: str, variable: str, out_dir: str, pdf=None) -> N
         .sel(time=("1980", "2015"))
     ensemble_max_avg = ensemble_max_avg.sel(time=("1980", "2015")).mean(dim="time").dt.days
 
-    ensemble_min_avg.assign_coords(lon=(((ensemble_min_avg.lon + 180) % 360) - 180))
-    ensemble_max_avg.assign_coords(lon=(((ensemble_max_avg.lon + 180) % 360) - 180))
+    merra2_min = merra2_min.assign_coords(lon=((merra2_min.lon + 180) % 360))
+    merra2_max = merra2_max.assign_coords(lon=((merra2_max.lon + 180) % 360))
 
-    # f, ((ax1, ax2, ax3), (ax4, ax5, ax6)) = plt.subplots(2, 3, figsize=(35, 13),
-    #                                                                subplot_kw=dict(projection=ccrs.PlateCarree()))
-    f, (ax1, ax2) = plt.subplots(1, 2, figsize=(35, 13), subplot_kw=dict(projection=ccrs.PlateCarree()))
+    merra2_min = ndimage.zoom(merra2_min, (ensemble_min_avg.lat.size / merra2_min.lat.size,
+                                           ensemble_min_avg.lon.size / merra2_min.lon.size))
+    merra2_max = ndimage.zoom(merra2_max, (ensemble_max_avg.lat.size / merra2_max.lat.size,
+                                           ensemble_max_avg.lon.size / merra2_max.lon.size))
+
+    f, ((ax1, ax2, ax3), (ax4, ax5, ax6)) = plt.subplots(2, 3, figsize=(35, 13))
     f.suptitle(f"{variable} Exp. {exp_num} MERRA2 Comparison (1980-2015 Avg)", fontsize=30)
     font = {'family': 'normal',
             'weight': 'bold',
             'size': 22}
     rc('font', **font)
 
-    vmin = 0
-    vmax = 156
-    #norm = colors.TwoSlopeNorm(vmin=vmin, vcenter=0, vmax=vmax)
+    vmin = -100
+    vmax = 100
+    norm = colors.TwoSlopeNorm(vmin=vmin, vcenter=0, vmax=vmax)
 
-    merra2_min.plot(ax=ax1, cmap="rainbow", vmax=vmax, vmin=vmin, rasterized=True)
-    ax1.coastlines()
-    ax1.set_title(f"merra2_min")
+    print("Plotting..")
 
-    merra2_max.plot(ax=ax2, cmap="rainbow", vmax=vmax, vmin=vmin, rasterized=True)
-    ax2.coastlines()
-    ax2.set_title(f"merra2_max")
+    ax1.set_title(f"ALL {variable} Min. Top 90 Perc.")
+    ax1.pcolor(ensemble_min_avg, cmap='seismic', vmax=vmax, vmin=vmin, rasterized=True)
 
-    # ax1.set_title(f"ALL {variable} Min. Top 90 Perc.")
-    # ax1.coastlines()
-    # ensemble_min_avg.plot(ax=ax1, cmap="seismic", norm=norm, vmax=vmax, vmin=vmin, rasterized=True)
-    #
-    # ax2.set_title(f"MERRA2 {variable} Min. Top 90 Perc.")
-    # ax2.coastlines()
-    # merra2_min.plot(ax=ax2, cmap="seismic", norm=norm, vmax=vmax, vmin=vmin, rasterized=True)
-    #
-    # ax3.set_title(f"ALL vs MERRA2 {variable} Min. Top 90 Perc.")
-    # ax3.coastlines()
-    # min_diff = ensemble_min_avg - merra2_min
-    # min_diff.plot(ax=ax3, cmap="seismic", norm=norm, vmax=vmax, vmin=vmin, rasterized=True)
-    #
-    # ax4.set_title(f"ALL {variable} Max. Top 90 Perc.")
-    # ax4.coastlines()
-    # ensemble_max_avg.plot(ax=ax4, cmap="seismic", norm=norm, vmax=vmax, vmin=vmin, rasterized=True)
-    #
-    # ax5.set_title(f"MERRA2 {variable} Max. Top 90 Perc.")
-    # ax5.coastlines()
-    # merra2_max.plot(ax=ax5, cmap="seismic", norm=norm, vmax=vmax, vmin=vmin, rasterized=True)
-    #
-    # ax6.set_title(f"ALL vs MERRA2 {variable} Max. Top 90 Perc.")
-    # ax6.coastlines()
-    # max_diff = ensemble_max_avg - merra2_max
-    # max_diff.plot(ax=ax6, cmap="seismic", norm=norm, vmax=vmax, vmin=vmin, rasterized=True)
+    ax2.set_title(f"MERRA2 {variable} Min. Top 90 Perc.")
+    ax2.pcolor(merra2_min, cmap='seismic', vmax=vmax, vmin=vmin, rasterized=True)
+
+    ax3.set_title(f"ALL vs MERRA2 {variable} Min. Top 90 Perc.")
+    min_diff = ensemble_min_avg - merra2_min
+    ax3.pcolor(min_diff, cmap='seismic', vmax=vmax, vmin=vmin, rasterized=True)
+
+    ax4.set_title(f"ALL {variable} Max. Top 90 Perc.")
+    ax4.pcolor(ensemble_max_avg, cmap='seismic', vmax=vmax, vmin=vmin, rasterized=True)
+
+    ax5.set_title(f"MERRA2 {variable} Max. Top 90 Perc.")
+    ax5.pcolor(merra2_max, cmap='seismic', vmax=vmax, vmin=vmin, rasterized=True)
+
+    ax6.set_title(f"ALL vs MERRA2 {variable} Max. Top 90 Perc.")
+    max_diff = ensemble_max_avg - merra2_max
+    ax6.pcolor(max_diff, cmap='seismic', vmax=vmax, vmin=vmin, rasterized=True)
+
+    print("Saving image...")
 
     f.tight_layout()
     if pdf is None:
@@ -833,6 +833,3 @@ def generate_figure_pdf() -> None:
         process.start()
     for process in processes:
         process.join()
-
-
-output_merra2_maps("3114", "HWF", FIGURE_IMAGE_OUTPUT)
