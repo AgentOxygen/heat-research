@@ -2,7 +2,8 @@ import os
 import cartopy.crs as ccrs
 from settings import RESAMPLED_YEARLY_AVG, SAMPLE_NC, POST_OUT_EM_AVGS_1920_1950, \
     POST_HEAT_THRESHOLDS_1920_TO_1950, DATA_DIR, POST_HEAT_OUTPUT_1920_1950_BASE, \
-    MERRA2_DATA, FIGURE_IMAGE_OUTPUT, CONCATENATED_DATA, POST_HEAT_OUTPUT_CONCAT_1920_1950_BASE
+    MERRA2_DATA, FIGURE_IMAGE_OUTPUT, CONCATENATED_DATA, POST_HEAT_OUTPUT_CONCAT_1920_1950_BASE, \
+    POST_ALL_THRESHOLDS_1980_TO_2000, POST_HEAT_OUTPUT_1980_2000_BASE
 import xarray
 import numpy as np
 import matplotlib.pyplot as plt
@@ -18,7 +19,7 @@ from scipy import ndimage
 import preprocessing as pp
 
 load_datasets = True
-load_datasets = True
+
 if load_datasets:
     dataset_names = listdir(RESAMPLED_YEARLY_AVG)
     xaer_datasets = [name for name in dataset_names if 'XAER' in name]
@@ -276,6 +277,34 @@ def output_all_animated() -> None:
     output_animated_yrly_trefht_based(trefht_all_datasets, "all-output.gif", "ALL", color_bar_max=3)
 
 
+def process_all_thresholds_1980_2000() -> None:
+    processes = []
+    em_dataset_names = listdir(CONCATENATED_DATA)
+    max_em_set = [name for name in em_dataset_names if "all" in name and "max" in name]
+    min_em_set = [name for name in em_dataset_names if "all" in name and "min" in name]
+    max_em_set.sort()
+    min_em_set.sort()
+
+    ensemble_sets = [(max_em_set, min_em_set, "ALL")]
+    for max_em, min_em, label in ensemble_sets:
+        for index, max_path in enumerate(max_em):
+            max_ds_path = CONCATENATED_DATA + max_path
+            min_ds_path = CONCATENATED_DATA + min_em[index]
+            print(max_ds_path)
+            print(min_ds_path)
+            dir_path = "/projects/dgs/persad_research/heat_research/postprocessing/1980to2010_ensemble_members/thresholds"
+            proc = Process(target=system,
+                           args=(f'python3 ehfheatwaves_threshold.py -x {max_ds_path} -n {min_ds_path}'
+                                 + f' --change_dir {dir_path}{label}-{index}-'
+                                 + f' --t90pc --base=1980-2010 -d CESM2 -p 90 --vnamex TREFHTMX --vnamen TREFHTMN',))
+            proc.daemon = True
+            proc.start()
+            processes.append(proc)
+
+    for process in processes:
+        process.join()
+
+
 def process_heat_thresholds_1920_1950() -> None:
     processes = []
     formers = [(pp.trefhtmax_xghg_former_em, pp.trefhtmin_xghg_former_em, "XGHG"),
@@ -338,7 +367,37 @@ def calculate_heat_metrics_1920_1950_baseline() -> None:
             process.join()
 
 
-calculate_heat_metrics_1920_1950_baseline()
+def calculate_heat_ALL_1980_2000_baseline() -> None:
+    processes = []
+
+    thresholds = [name for name in listdir(POST_ALL_THRESHOLDS_1980_TO_2000) if "ALL" in name]
+    min_all_ensemble_members = [name for name in listdir(CONCATENATED_DATA) if "min_all" in name]
+    max_all_ensemble_members = [name for name in listdir(CONCATENATED_DATA) if "max_all" in name]
+
+    thresholds.sort()
+    min_all_ensemble_members.sort()
+    max_all_ensemble_members.sort()
+
+    for index, max_path in enumerate(max_all_ensemble_members):
+        max_ds_path = CONCATENATED_DATA + max_path
+        min_ds_path = CONCATENATED_DATA + min_all_ensemble_members[index]
+        th_path = POST_ALL_THRESHOLDS_1980_TO_2000 + thresholds[index]
+        print(max_ds_path)
+        print(min_ds_path)
+        proc = Process(target=system,
+                       args=(f'python3 ehfheatwaves_compound_inputthres_3.py -x {max_ds_path} -n {min_ds_path}'
+                             + f' --change_dir {POST_HEAT_OUTPUT_1980_2000_BASE}ALL-{index}-1980-2000'
+                               f'- --thres {th_path}'
+                             + f' --base=1980-2000 -d CESM2 --vnamex TREFHTMX --vnamen TREFHTMN',))
+        proc.daemon = True
+        proc.start()
+        processes.append(proc)
+        if (index + 1) % 6 == 0:
+            print(index)
+            for process in processes:
+                process.join()
+    for process in processes:
+        process.join()
 
 def average_heat_outputs() -> None:
     def process_ds(label_: str, exp_num_: str, latter_datasets_: list, former_datasets_: list) -> None:
@@ -833,3 +892,5 @@ def generate_figure_pdf() -> None:
         process.start()
     for process in processes:
         process.join()
+
+calculate_heat_ALL_1980_2000_baseline()

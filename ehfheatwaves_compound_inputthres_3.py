@@ -104,7 +104,7 @@ def period_range(*args, without_leap=False, **kwargs):
 # Load time data
 try:
     tmaxnc = MFDataset(options.tmaxfile, 'r')
-except (IndexError, ValueError):
+except (IndexError, ValueError, OSError):
     tmaxnc = Dataset(options.tmaxfile, 'r')
 nctime = tmaxnc.variables[options.timevname]
 try:
@@ -220,11 +220,11 @@ dates_base = bpdates[(bpstart<=bpdates.year)&(bpdates.year<=bpend)]
 # Load all data
 try:
     tminnc = MFDataset(options.tminfile, 'r')
-except (IndexError, ValueError):
+except (IndexError, ValueError, OSError):
     tminnc = Dataset(options.tminfile, 'r')
 try:
     tmaxnc = MFDataset(options.tmaxfile, 'r')
-except (IndexError, ValueError):
+except (IndexError, ValueError, OSError):
     tmaxnc = Dataset(options.tmaxfile, 'r')
 tmax = tmaxnc.variables[options.tmaxvname][:]
 if len(tmax.shape)==4: tmax = tmax.squeeze()
