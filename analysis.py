@@ -1,9 +1,8 @@
 import os
 import cartopy.crs as ccrs
-from settings import RESAMPLED_YEARLY_AVG, SAMPLE_NC, POST_OUT_EM_AVGS_1920_1950, \
-    POST_HEAT_THRESHOLDS_1920_TO_1950, DATA_DIR, POST_HEAT_OUTPUT_1920_1950_BASE, \
-    MERRA2_DATA, FIGURE_IMAGE_OUTPUT, CONCATENATED_DATA, POST_HEAT_OUTPUT_CONCAT_1920_1950_BASE, \
-    POST_ALL_THRESHOLDS_1980_TO_2000, POST_HEAT_OUTPUT_1980_2000_BASE
+import paths
+from paths import RESAMPLED_YEARLY_AVG, SAMPLE_NC, OUT_EM_AVGS_1920_1950, HEAT_OUTPUT_1920_1950_BASE, \
+    MERRA2_DATA, FIGURE_IMAGE_OUTPUT, OUT_ALL_AVGS_1980_2000
 import xarray
 import numpy as np
 import matplotlib.pyplot as plt
@@ -13,44 +12,7 @@ from os import listdir, remove, system
 import imageio
 from uuid import uuid4
 from multiprocessing import Process, Queue
-from textwrap import wrap
 from matplotlib.backends.backend_pdf import PdfPages
-from scipy import ndimage
-import preprocessing as pp
-
-load_datasets = True
-
-if load_datasets:
-    dataset_names = listdir(RESAMPLED_YEARLY_AVG)
-    xaer_datasets = [name for name in dataset_names if 'XAER' in name]
-    xghg_datasets = [name for name in dataset_names if 'XGHG' in name]
-    all_datasets = [name for name in dataset_names if 'all' in name]
-
-    trefht_xaer_datasets = [name for name in xaer_datasets if 'TREFHT_' in name]
-    trefht_xghg_datasets = [name for name in xghg_datasets if 'TREFHT_' in name]
-    trefht_all_datasets = [name for name in all_datasets if 'TREFHT_' in name]
-
-    dataset_names = listdir(POST_HEAT_THRESHOLDS_1920_TO_1950)
-    threshold_xaer_datasets = [name for name in dataset_names if 'XAER' in name]
-    threshold_xghg_datasets = [name for name in dataset_names if 'XGHG' in name]
-    threshold_all_datasets = [name for name in dataset_names if 'ALL' in name]
-
-    dataset_names = listdir(POST_HEAT_OUTPUT_1920_1950_BASE + "split/")
-    heat_out_max_former_xaer_datasets = [name for name in dataset_names if 'former-XAER' in name and 'tx' in name]
-    heat_out_max_former_xghg_datasets = [name for name in dataset_names if 'former-XGHG' in name and 'tx' in name]
-    heat_out_max_former_all_datasets = [name for name in dataset_names if 'former-ALL' in name and 'tx' in name]
-    heat_out_max_latter_xaer_datasets = [name for name in dataset_names if 'latter-XAER' in name and 'tx' in name]
-    heat_out_max_latter_xghg_datasets = [name for name in dataset_names if 'latter-XGHG' in name and 'tx' in name]
-    heat_out_max_latter_all_datasets = [name for name in dataset_names if 'latter-ALL' in name and 'tx' in name]
-
-    heat_out_min_former_xaer_datasets = [name for name in dataset_names if 'former-XAER' in name and 'tn' in name]
-    heat_out_min_former_xghg_datasets = [name for name in dataset_names if 'former-XGHG' in name and 'tn' in name]
-    heat_out_min_former_all_datasets = [name for name in dataset_names if 'former-ALL' in name and 'tn' in name]
-    heat_out_min_latter_xaer_datasets = [name for name in dataset_names if 'latter-XAER' in name and 'tn' in name]
-    heat_out_min_latter_xghg_datasets = [name for name in dataset_names if 'latter-XGHG' in name and 'tn' in name]
-    heat_out_min_latter_all_datasets = [name for name in dataset_names if 'latter-ALL' in name and 'tn' in name]
-
-    print("Dataset paths loaded.")
 
 
 def avg_min_max_list_of_lists(lists: list) -> tuple:
@@ -72,6 +34,8 @@ def fig1_recreation(img_output_path: str, time_slice_begin=1920, time_slice_end=
                     baseline_end=1970):
     all_mean_temps = []
     all_temp_lists = []
+    trefht_all_datasets, trefht_xaer_datasets, trefht_xghg_datasets = paths.get_paths_annual_averages()
+
     for ds_name in trefht_all_datasets:
         ds = xarray.open_dataset(RESAMPLED_YEARLY_AVG + ds_name)
         ds = ds.sel(year=slice(time_slice_begin, time_slice_end))
@@ -272,223 +236,13 @@ def output_animated_sample() -> None:
 
 
 def output_all_animated() -> None:
+    trefht_all_datasets, trefht_xaer_datasets, trefht_xghg_datasets = paths.get_paths_annual_averages()
     output_animated_yrly_trefht_based(trefht_xaer_datasets, "xaer-output.gif", "XAER", color_bar_max=3)
     output_animated_yrly_trefht_based(trefht_xghg_datasets, "xghg-output.gif", "XGHG")
     output_animated_yrly_trefht_based(trefht_all_datasets, "all-output.gif", "ALL", color_bar_max=3)
 
 
-def process_all_thresholds_1980_2000() -> None:
-    processes = []
-    em_dataset_names = listdir(CONCATENATED_DATA)
-    max_em_set = [name for name in em_dataset_names if "all" in name and "max" in name]
-    min_em_set = [name for name in em_dataset_names if "all" in name and "min" in name]
-    max_em_set.sort()
-    min_em_set.sort()
-
-    ensemble_sets = [(max_em_set, min_em_set, "ALL")]
-    for max_em, min_em, label in ensemble_sets:
-        for index, max_path in enumerate(max_em):
-            max_ds_path = CONCATENATED_DATA + max_path
-            min_ds_path = CONCATENATED_DATA + min_em[index]
-            print(max_ds_path)
-            print(min_ds_path)
-            dir_path = "/projects/dgs/persad_research/heat_research/postprocessing/1980to2010_ensemble_members/thresholds"
-            proc = Process(target=system,
-                           args=(f'python3 ehfheatwaves_threshold.py -x {max_ds_path} -n {min_ds_path}'
-                                 + f' --change_dir {dir_path}{label}-{index}-'
-                                 + f' --t90pc --base=1980-2010 -d CESM2 -p 90 --vnamex TREFHTMX --vnamen TREFHTMN',))
-            proc.daemon = True
-            proc.start()
-            processes.append(proc)
-
-    for process in processes:
-        process.join()
-
-
-def process_heat_thresholds_1920_1950() -> None:
-    processes = []
-    formers = [(pp.trefhtmax_xghg_former_em, pp.trefhtmin_xghg_former_em, "XGHG"),
-               (pp.trefhtmax_xaer_former_em, pp.trefhtmin_xaer_former_em, "XAER"),
-               (pp.trefhtmax_all_former_em, pp.trefhtmin_all_former_em, "ALL")]
-    for max_em, min_em, label in formers:
-        for index, max_former_path in enumerate(max_em):
-            max_ds_path = DATA_DIR + max_former_path
-            min_ds_path = DATA_DIR + min_em[index]
-            print(max_ds_path)
-            print(min_ds_path)
-            proc = Process(target=system,
-                           args=(f'python3 ehfheatwaves_threshold.py -x {max_ds_path} -n {min_ds_path}'
-                                 + f' --change_dir {POST_HEAT_THRESHOLDS_1920_TO_1950}{label}-{index}-'
-                                 + f' --t90pc --base=1920-1950 -d CESM2 -p 90 --vnamex TREFHTMX --vnamen TREFHTMN',))
-            proc.daemon = True
-            proc.start()
-            processes.append(proc)
-
-    for process in processes:
-        process.join()
-
-
-def calculate_heat_metrics_1920_1950_baseline() -> None:
-    processes = []
-
-    datasets = listdir(CONCATENATED_DATA)
-    trefhtmax_xghg_em = [name for name in datasets if "trefhtmax_xghg" in name]
-    trefhtmin_xghg_em = [name for name in datasets if "trefhtmin_xghg" in name]
-    trefhtmax_xaer_em = [name for name in datasets if "trefhtmax_xaer" in name]
-    trefhtmin_xaer_em = [name for name in datasets if "trefhtmin_xaer" in name]
-    trefhtmax_all_em = [name for name in datasets if "trefhtmax_all" in name]
-    trefhtmin_all_em = [name for name in datasets if "trefhtmin_all" in name]
-
-    ensemble_members = [(trefhtmax_xghg_em, trefhtmin_xghg_em,
-                         threshold_xghg_datasets, "XGHG"),
-                        (trefhtmax_xaer_em, trefhtmin_xaer_em,
-                         threshold_xaer_datasets, "XAER"),
-                        (trefhtmax_all_em, trefhtmin_all_em,
-                         threshold_all_datasets, "ALL")]
-    for max_em, min_em, threshold_em, label in ensemble_members:
-        for index, max_former_path in enumerate(max_em):
-            max_ds_path = CONCATENATED_DATA + max_former_path
-            min_ds_path = CONCATENATED_DATA + min_em[index]
-            th_path = POST_HEAT_THRESHOLDS_1920_TO_1950 + threshold_em[index]
-            print(max_ds_path)
-            print(min_ds_path)
-            proc = Process(target=system,
-                           args=(f'python3 ehfheatwaves_compound_inputthres_3.py -x {max_ds_path} -n {min_ds_path}'
-                                 + f' --change_dir {POST_HEAT_OUTPUT_CONCAT_1920_1950_BASE + "split/"}{label}-{index}- --thres {th_path}'
-                                 + f' --base=1920-1950 -d CESM2 --vnamex TREFHTMX --vnamen TREFHTMN',))
-            proc.daemon = True
-            proc.start()
-            processes.append(proc)
-            if (index + 1) % 6 == 0:
-                print(index)
-                for process in processes:
-                    process.join()
-        for process in processes:
-            process.join()
-
-
-def calculate_heat_ALL_1980_2000_baseline() -> None:
-    processes = []
-
-    thresholds = [name for name in listdir(POST_ALL_THRESHOLDS_1980_TO_2000) if "ALL" in name]
-    min_all_ensemble_members = [name for name in listdir(CONCATENATED_DATA) if "min_all" in name]
-    max_all_ensemble_members = [name for name in listdir(CONCATENATED_DATA) if "max_all" in name]
-
-    thresholds.sort()
-    min_all_ensemble_members.sort()
-    max_all_ensemble_members.sort()
-
-    for index, max_path in enumerate(max_all_ensemble_members):
-        max_ds_path = CONCATENATED_DATA + max_path
-        min_ds_path = CONCATENATED_DATA + min_all_ensemble_members[index]
-        th_path = POST_ALL_THRESHOLDS_1980_TO_2000 + thresholds[index]
-        print(max_ds_path)
-        print(min_ds_path)
-        proc = Process(target=system,
-                       args=(f'python3 ehfheatwaves_compound_inputthres_3.py -x {max_ds_path} -n {min_ds_path}'
-                             + f' --change_dir {POST_HEAT_OUTPUT_1980_2000_BASE}ALL-{index}-1980-2000'
-                               f'- --thres {th_path}'
-                             + f' --base=1980-2000 -d CESM2 --vnamex TREFHTMX --vnamen TREFHTMN',))
-        proc.daemon = True
-        proc.start()
-        processes.append(proc)
-        if (index + 1) % 6 == 0:
-            print(index)
-            for process in processes:
-                process.join()
-    for process in processes:
-        process.join()
-
-def average_heat_outputs() -> None:
-    def process_ds(label_: str, exp_num_: str, latter_datasets_: list, former_datasets_: list) -> None:
-        full_label = f"{label_}-{exp_num_}.nc"
-        print(full_label)
-        latter_definitions = [ds for ds in latter_datasets_ if exp_num_ in ds]
-        former_definitions = [ds for ds in former_datasets_ if exp_num_ in ds]
-
-        latter_average = xarray.open_dataset(POST_HEAT_OUTPUT_1920_1950_BASE + latter_definitions[0]) * 0
-        for dataset_ in latter_definitions:
-            ds = xarray.open_dataset(POST_HEAT_OUTPUT_1920_1950_BASE + dataset_)
-            latter_average += ds
-        latter_average = latter_average / len(latter_definitions)
-
-        if "tn9pct" in latter_average:
-            latter_average.drop("tn9pct")
-        else:
-            latter_average.drop("tx9pct")
-
-        former_average = xarray.open_dataset(POST_HEAT_OUTPUT_1920_1950_BASE + former_definitions[0]) * 0
-        for dataset_ in former_definitions:
-            ds = xarray.open_dataset(POST_HEAT_OUTPUT_1920_1950_BASE + dataset_)
-            former_average += ds
-        former_average = former_average / len(former_definitions)
-
-        if "tn9pct" in former_average:
-            former_average.drop("tn9pct")
-        else:
-            former_average.drop("tx9pct")
-
-        average = xarray.concat([former_average, latter_average], dim="time")
-        average.to_netcdf(POST_OUT_EM_AVGS_1920_1950 + full_label)
-
-    groups = [(heat_out_max_latter_all_datasets, heat_out_max_former_all_datasets, "ALL-max"),
-              (heat_out_max_latter_xaer_datasets, heat_out_max_former_xaer_datasets, "XAER-max"),
-              (heat_out_max_latter_xghg_datasets, heat_out_max_former_xghg_datasets, "XGHG-max"),
-              (heat_out_min_latter_all_datasets, heat_out_min_former_all_datasets, "ALL-min"),
-              (heat_out_min_latter_xaer_datasets, heat_out_min_former_xaer_datasets, "XAER-min"),
-              (heat_out_min_latter_xghg_datasets, heat_out_min_former_xghg_datasets, "XGHG-min")]
-
-    processes = []
-
-    for latter_datasets, former_datasets, label in groups:
-        exp_nums = ["3336", "3314", "3236", "3214", "3136", "3114"]
-        for exp_num in exp_nums:
-            proc = Process(target=process_ds, args=(label, exp_num, latter_datasets, former_datasets))
-            proc.daemon = True
-            proc.start()
-            processes.append(proc)
-
-        for process in processes:
-            process.join()
-
-
-def concatenate_ensemble_members_heat_outputs() -> None:
-    def concat(former_name: str) -> None:
-        former_ds = xarray.open_dataset(path + former_name)
-        latter_ds = xarray.open_dataset(path + former_name.replace("former", "latter"))
-        concatenated = xarray.concat([former_ds, latter_ds], dim="time")
-        concat_name = former_name.replace("former-", "")
-        print(former_name)
-        print(concat_name)
-        concatenated.to_netcdf(POST_HEAT_OUTPUT_1920_1950_BASE + concat_name)
-
-    path = POST_HEAT_OUTPUT_1920_1950_BASE + "split/"
-    file_names = os.listdir(path)
-    file_names = [name for name in file_names if 'former' in name]
-    tmp = []
-    for name in file_names:
-        if not os.path.isfile(POST_HEAT_OUTPUT_1920_1950_BASE + name.replace("former-", "")):
-            tmp.append(name)
-    file_names = tmp
-
-    print(f"{len(file_names)} missing netCDF files")
-
-    processes = []
-
-    for index, former_name_ in enumerate(file_names):
-        print(f"Process {index}")
-        proc = Process(target=concat, args=(former_name_,))
-        proc.daemon = True
-        proc.start()
-        processes.append(proc)
-        if (index + 1) % 2 == 0:
-            for process in processes:
-                process.join()
-    for process in processes:
-        process.join()
-
-
-def output_heat_maps(variable:str, past_begin: str, past_end: str, fut_begin: str, fut_end: str,
+def output_heat_maps(variable: str, past_begin: str, past_end: str, fut_begin: str, fut_end: str,
                      out_dir: str, pdf=None) -> None:
     exp_nums = ["3336", "3314", "3236", "3214", "3136", "3114"]
     simulations = ["ALL", "XGHG", "XAER"]
@@ -509,7 +263,7 @@ def output_heat_maps(variable:str, past_begin: str, past_end: str, fut_begin: st
                 simulation = simulations[iindex]
                 title = f"{simulation} {variant}"
                 print(f"{exp_num} {title}")
-                ds = xarray.open_dataset(POST_OUT_EM_AVGS_1920_1950 + f"{simulation}-{variant}-{exp_num}.nc")
+                ds = xarray.open_dataset(OUT_EM_AVGS_1920_1950 + f"{simulation}-{variant}-{exp_num}.nc")
                 past = ds[f"{variable}_{suffix}"].sel(time=(past_begin, past_end)).mean(dim="time").dt.days
                 future = ds[f"{variable}_{suffix}"].sel(time=(fut_begin, fut_end)).mean(dim="time").dt.days
                 perc_change = (future - past)
@@ -529,56 +283,47 @@ def output_heat_maps(variable:str, past_begin: str, past_end: str, fut_begin: st
 def output_merra2_maps(exp_num: str, variable: str, out_dir: str, pdf=None) -> None:
     merra_min_path = f"tn90pct_heatwaves_MERRA2_rNone_{exp_num}_yearly_summer.nc"
     merra_max_path = f"tx90pct_heatwaves_MERRA2_rNone_{exp_num}_yearly_summer.nc"
-    merra2_min = xarray.open_dataset(MERRA2_DATA + merra_min_path)[f"{variable}_tn9pct"].mean(dim="time").dt.days
-    merra2_max = xarray.open_dataset(MERRA2_DATA + merra_max_path)[f"{variable}_tx9pct"].mean(dim="time").dt.days
+    merra2_min = xarray.open_dataset(MERRA2_DATA + merra_min_path)[f"{variable}_tn90pct"].mean(dim="time").dt.days
+    merra2_max = xarray.open_dataset(MERRA2_DATA + merra_max_path)[f"{variable}_tx90pct"].mean(dim="time").dt.days
 
-    ensemble_min_avg = xarray.open_dataset(POST_OUT_EM_AVGS_1920_1950 + f"ALL-min-{exp_num}.nc")[f"{variable}_tn9pct"]\
-        .sel(time=("1980", "2015"))
-    ensemble_min_avg = ensemble_min_avg.sel(time=("1980", "2015")).mean(dim="time").dt.days
-    ensemble_max_avg = xarray.open_dataset(POST_OUT_EM_AVGS_1920_1950 + f"ALL-max-{exp_num}.nc")[f"{variable}_tx9pct"]\
-        .sel(time=("1980", "2015"))
-    ensemble_max_avg = ensemble_max_avg.sel(time=("1980", "2015")).mean(dim="time").dt.days
+    ensemble_min_avg = xarray.open_dataset(OUT_ALL_AVGS_1980_2000 + f"ALL-min-{exp_num}.nc")[f"{variable}_tn90pct"]\
+        .sel(time=("1980", "2010"))
+    ensemble_min_avg = ensemble_min_avg.sel(time=("1980", "2010")).mean(dim="time").dt.days
+    ensemble_max_avg = xarray.open_dataset(OUT_ALL_AVGS_1980_2000 + f"ALL-max-{exp_num}.nc")[f"{variable}_tx90pct"]\
+        .sel(time=("1980", "2010"))
+    ensemble_max_avg = ensemble_max_avg.sel(time=("1980", "2010")).mean(dim="time").dt.days
 
-    merra2_min = merra2_min.assign_coords(lon=((merra2_min.lon + 180) % 360))
-    merra2_max = merra2_max.assign_coords(lon=((merra2_max.lon + 180) % 360))
+    #merra2_min = merra2_min.assign_coords(lon=((merra2_min.lon + 180) % 360))
+    #merra2_max = merra2_max.assign_coords(lon=((merra2_max.lon + 180) % 360))
 
-    merra2_min = ndimage.zoom(merra2_min, (ensemble_min_avg.lat.size / merra2_min.lat.size,
-                                           ensemble_min_avg.lon.size / merra2_min.lon.size))
-    merra2_max = ndimage.zoom(merra2_max, (ensemble_max_avg.lat.size / merra2_max.lat.size,
-                                           ensemble_max_avg.lon.size / merra2_max.lon.size))
-
-    f, ((ax1, ax2, ax3), (ax4, ax5, ax6)) = plt.subplots(2, 3, figsize=(35, 13))
-    f.suptitle(f"{variable} Exp. {exp_num} MERRA2 Comparison (1980-2015 Avg)", fontsize=30)
+    f, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2, 2, figsize=(35, 13), subplot_kw=dict(projection=ccrs.PlateCarree()))
+    f.suptitle(f"{variable} Exp. {exp_num} MERRA2 Comparison (1980-2010 Avg)", fontsize=30)
     font = {'family': 'normal',
             'weight': 'bold',
             'size': 22}
     rc('font', **font)
 
-    vmin = -100
-    vmax = 100
-    norm = colors.TwoSlopeNorm(vmin=vmin, vcenter=0, vmax=vmax)
+    vmin = 0
+    vmax = 25
+    #norm = colors.TwoSlopeNorm(vmin=vmin, vcenter=0, vmax=vmax)
 
     print("Plotting..")
 
+    ensemble_min_avg.plot(ax=ax1, cmap='Reds', vmax=vmax, vmin=vmin, rasterized=True)
     ax1.set_title(f"ALL {variable} Min. Top 90 Perc.")
-    ax1.pcolor(ensemble_min_avg, cmap='seismic', vmax=vmax, vmin=vmin, rasterized=True)
+    ax1.coastlines()
 
+    merra2_min.plot(ax=ax2, cmap='Reds', vmax=vmax, vmin=vmin, rasterized=True)
     ax2.set_title(f"MERRA2 {variable} Min. Top 90 Perc.")
-    ax2.pcolor(merra2_min, cmap='seismic', vmax=vmax, vmin=vmin, rasterized=True)
+    ax2.coastlines()
+    
+    ensemble_max_avg.plot(ax=ax3, cmap='Reds', vmax=vmax, vmin=vmin, rasterized=True)
+    ax3.set_title(f"ALL {variable} Max. Top 90 Perc.")
+    ax3.coastlines()
 
-    ax3.set_title(f"ALL vs MERRA2 {variable} Min. Top 90 Perc.")
-    min_diff = ensemble_min_avg - merra2_min
-    ax3.pcolor(min_diff, cmap='seismic', vmax=vmax, vmin=vmin, rasterized=True)
-
-    ax4.set_title(f"ALL {variable} Max. Top 90 Perc.")
-    ax4.pcolor(ensemble_max_avg, cmap='seismic', vmax=vmax, vmin=vmin, rasterized=True)
-
-    ax5.set_title(f"MERRA2 {variable} Max. Top 90 Perc.")
-    ax5.pcolor(merra2_max, cmap='seismic', vmax=vmax, vmin=vmin, rasterized=True)
-
-    ax6.set_title(f"ALL vs MERRA2 {variable} Max. Top 90 Perc.")
-    max_diff = ensemble_max_avg - merra2_max
-    ax6.pcolor(max_diff, cmap='seismic', vmax=vmax, vmin=vmin, rasterized=True)
+    merra2_max.plot(ax=ax4, cmap='Reds', vmax=vmax, vmin=vmin, rasterized=True)
+    ax4.set_title(f"MERRA2 {variable} Max. Top 90 Perc.")
+    ax4.coastlines()
 
     print("Saving image...")
 
@@ -603,7 +348,7 @@ def output_heat_signal_isolating_maps(variable: str, exp_num: str, time_begin: s
     for row in axis:
         variant, suffix = variants[index]
         iindex = 0
-        all_ds = xarray.open_dataset(POST_OUT_EM_AVGS_1920_1950 + f"ALL-{variant}-{exp_num}.nc")
+        all_ds = xarray.open_dataset(OUT_EM_AVGS_1920_1950 + f"ALL-{variant}-{exp_num}.nc")
         all_ds = all_ds[f"{variable}_{suffix}"]
         all_ds = all_ds.sel(time=(time_begin, time_end)).mean(dim="time").dt.days
         vmin = -75
@@ -614,14 +359,14 @@ def output_heat_signal_isolating_maps(variable: str, exp_num: str, time_begin: s
             if iindex == 0:
                 all_ds.plot(ax=cell, cmap="seismic", norm=norm, vmax=vmax, vmin=vmin, rasterized=True)
             elif iindex == 1:
-                xghg_ds = xarray.open_dataset(POST_OUT_EM_AVGS_1920_1950 + f"XGHG-{variant}-{exp_num}.nc")
+                xghg_ds = xarray.open_dataset(OUT_EM_AVGS_1920_1950 + f"XGHG-{variant}-{exp_num}.nc")
                 xghg_ds = xghg_ds[f"{variable}_{suffix}"]
                 xghg_ds = xghg_ds.sel(time=(time_begin, time_end)).mean(dim="time").dt.days
                 data_plot = all_ds - xghg_ds
                 data_plot.plot(ax=cell, cmap="seismic", norm=norm, vmax=vmax, vmin=vmin, rasterized=True)
                 title = f"GHG {variant}"
             else:
-                xaer_ds = xarray.open_dataset(POST_OUT_EM_AVGS_1920_1950 + f"XAER-{variant}-{exp_num}.nc")
+                xaer_ds = xarray.open_dataset(OUT_EM_AVGS_1920_1950 + f"XAER-{variant}-{exp_num}.nc")
                 xaer_ds = xaer_ds[f"{variable}_{suffix}"]
                 xaer_ds = xaer_ds.sel(time=(time_begin, time_end)).mean(dim="time").dt.days
                 data_plot2 = all_ds - xaer_ds
@@ -643,7 +388,7 @@ def output_heat_signal_isolating_maps(variable: str, exp_num: str, time_begin: s
 
 
 def spaghetti(variable: str, exp: str, out_dir: str, pdf=None) -> None:
-    dataset_names = listdir(POST_HEAT_OUTPUT_1920_1950_BASE)
+    dataset_names = listdir(HEAT_OUTPUT_1920_1950_BASE)
     heat_out_max_xaer_datasets = [name for name in dataset_names if 'XAER' in name and 'tx' in name and exp in name]
     heat_out_max_xghg_datasets = [name for name in dataset_names if 'XGHG' in name and 'tx' in name and exp in name]
     heat_out_max_all_datasets = [name for name in dataset_names if 'ALL' in name and 'tx' in name and exp in name]
@@ -673,7 +418,7 @@ def spaghetti(variable: str, exp: str, out_dir: str, pdf=None) -> None:
             color = "blue"
         for ds_name in ds_names:
             print(ds_name)
-            data = xarray.open_dataset(POST_HEAT_OUTPUT_1920_1950_BASE + ds_name)
+            data = xarray.open_dataset(HEAT_OUTPUT_1920_1950_BASE + ds_name)
             if "max" in label:
                 data = data[f"{variable}_tx9pct"].mean(dim="lat").mean(dim="lon").dt.days
                 if max_avg is None:
@@ -711,7 +456,7 @@ def spaghetti(variable: str, exp: str, out_dir: str, pdf=None) -> None:
 
 
 def aldente_spaghetti_differences(variable: str, exp: str, out_dir: str, pdf=None) -> None:
-    dataset_names = listdir(POST_HEAT_OUTPUT_1920_1950_BASE)
+    dataset_names = listdir(HEAT_OUTPUT_1920_1950_BASE)
     heat_out_max_xaer_datasets = [name for name in dataset_names if 'XAER' in name and 'tx' in name and exp in name]
     heat_out_max_xghg_datasets = [name for name in dataset_names if 'XGHG' in name and 'tx' in name and exp in name]
     heat_out_max_all_datasets = [name for name in dataset_names if 'ALL' in name and 'tx' in name and exp in name]
@@ -737,7 +482,7 @@ def aldente_spaghetti_differences(variable: str, exp: str, out_dir: str, pdf=Non
     all_max_avg = None
     for ds_name in heat_out_max_all_datasets:
         print(ds_name)
-        data = xarray.open_dataset(POST_HEAT_OUTPUT_1920_1950_BASE + ds_name)
+        data = xarray.open_dataset(HEAT_OUTPUT_1920_1950_BASE + ds_name)
         data = data[f"{variable}_tx9pct"].mean(dim="lat").mean(dim="lon").dt.days
         data.plot(ax=ax_max, color="red", alpha=0.2)
         if all_max_avg is None:
@@ -750,7 +495,7 @@ def aldente_spaghetti_differences(variable: str, exp: str, out_dir: str, pdf=Non
     all_min_avg = None
     for ds_name in heat_out_min_all_datasets:
         print(ds_name)
-        data = xarray.open_dataset(POST_HEAT_OUTPUT_1920_1950_BASE + ds_name)
+        data = xarray.open_dataset(HEAT_OUTPUT_1920_1950_BASE + ds_name)
         data = data[f"{variable}_tn9pct"].mean(dim="lat").mean(dim="lon").dt.days
         data.plot(ax=ax_min, color="red", alpha=0.2)
         if all_min_avg is None:
@@ -770,7 +515,7 @@ def aldente_spaghetti_differences(variable: str, exp: str, out_dir: str, pdf=Non
             color = "blue"
         for ds_name in ds_names:
             print(ds_name)
-            data = xarray.open_dataset(POST_HEAT_OUTPUT_1920_1950_BASE + ds_name)
+            data = xarray.open_dataset(HEAT_OUTPUT_1920_1950_BASE + ds_name)
             if "max" in label:
                 data = all_max_avg - data[f"{variable}_tx9pct"].mean(dim="lat").mean(dim="lon").dt.days
                 if max_avg is None:
@@ -893,4 +638,5 @@ def generate_figure_pdf() -> None:
     for process in processes:
         process.join()
 
-calculate_heat_ALL_1980_2000_baseline()
+
+output_merra2_maps("3336", "HWF", FIGURE_IMAGE_OUTPUT)

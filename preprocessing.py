@@ -5,33 +5,7 @@ import xarray
 from os import listdir, system
 from multiprocessing import Process
 
-# Group datasets in directory by variable, type, and former/latter half of the time series
-dataset_names = listdir(DATA_DIR)
-xaer_datasets = [name for name in dataset_names if 'xaer' in name]
-xghg_datasets = [name for name in dataset_names if 'xghg' in name]
-all_datasets = [name for name in dataset_names if 'BRCP85C5CNBDRD' in name or 'B20TRC5CNBDRD' in name]
 
-# em -> ensemble members
-trefht_xaer_latter_em = [name for name in xaer_datasets if '.TREFHT.20060101-20801231' in name]
-trefhtmin_xaer_latter_em = [name for name in xaer_datasets if '.TREFHTMN.20060101-20801231' in name]
-trefhtmax_xaer_latter_em = [name for name in xaer_datasets if '.TREFHTMX.20060101-20801231' in name]
-trefht_xaer_former_em = [name for name in xaer_datasets if '.TREFHT.19200101-20051231' in name]
-trefhtmin_xaer_former_em = [name for name in xaer_datasets if '.TREFHTMN.19200101-20051231' in name]
-trefhtmax_xaer_former_em = [name for name in xaer_datasets if '.TREFHTMX.19200101-20051231' in name]
-
-trefht_xghg_latter_em = [name for name in xghg_datasets if '.TREFHT.20060101-20801231' in name]
-trefhtmin_xghg_latter_em = [name for name in xghg_datasets if '.TREFHTMN.20060101-20801231' in name]
-trefhtmax_xghg_latter_em = [name for name in xghg_datasets if '.TREFHTMX.20060101-20801231' in name]
-trefht_xghg_former_em = [name for name in xghg_datasets if '.TREFHT.19200101-20051231' in name]
-trefhtmin_xghg_former_em = [name for name in xghg_datasets if '.TREFHTMN.19200101-20051231' in name]
-trefhtmax_xghg_former_em = [name for name in xghg_datasets if '.TREFHTMX.19200101-20051231' in name]
-
-trefht_all_latter_em = [name for name in all_datasets if '.TREFHT.20060101-20801231' in name]
-trefhtmin_all_latter_em = [name for name in all_datasets if '.TREFHTMN.20060101-20801231' in name]
-trefhtmax_all_latter_em = [name for name in all_datasets if '.TREFHTMX.20060101-20801231' in name]
-trefht_all_former_em = [name for name in all_datasets if '.TREFHT.19200101-20051231' in name]
-trefhtmin_all_former_em = [name for name in all_datasets if '.TREFHTMN.19200101-20051231' in name]
-trefhtmax_all_former_em = [name for name in all_datasets if '.TREFHTMX.19200101-20051231' in name]
 
 print("File Name Lists populated.")
 
