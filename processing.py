@@ -75,25 +75,15 @@ def calculate_heat_metrics_1920_1950_baseline() -> None:
                         (max_all_em, min_all_em,
                          threshold_all_datasets, "ALL")]
     for max_em, min_em, threshold_em, label in ensemble_members:
-        for index, max_former_path in enumerate(max_em):
-            max_ds_path = max_former_path
+        for index, max_path in enumerate(max_em):
+            max_ds_path = max_path
             min_ds_path = min_em[index]
             th_path = threshold_em[index]
             print(max_ds_path)
             print(min_ds_path)
-            proc = Process(target=system,
-                           args=(f'python3 ehfheatwaves_compound_inputthres_3.py -x {max_ds_path} -n {min_ds_path}'
-                                 + f' --change_dir {HEAT_OUTPUT_CONCAT_1920_1950_BASE + "split/"}{label}-{index}- '
-                                 + f'--thres {th_path} --base=1920-1950 -d CESM2 --vnamex TREFHTMX --vnamen TREFHTMN',))
-            proc.daemon = True
-            proc.start()
-            processes.append(proc)
-            if (index + 1) % 6 == 0:
-                print(index)
-                for process in processes:
-                    process.join()
-        for process in processes:
-            process.join()
+            system(f'python3 ehfheatwaves_compound_inputthres_3.py -x {max_ds_path} -n {min_ds_path}'
+                                 + f' --change_dir {HEAT_OUTPUT_CONCAT_1920_1950_BASE}{label}-{index}- '
+                                 + f'--thres {th_path} --base=1920-1950 -d CESM2 --vnamex TREFHTMX --vnamen TREFHTMN')
 
 
 def calculate_heat_ALL_1980_2000_baseline() -> None:
@@ -256,5 +246,5 @@ def average_all_1980_2000_heat_outputs() -> None:
         for process in processes:
             process.join()
 
-#average_all_1980_2000_heat_outputs()
+calculate_heat_metrics_1920_1950_baseline()
 

@@ -1,6 +1,6 @@
 import os.path
 
-from settings import DATA_DIR, RESAMPLED_YEARLY_AVG, TIME_SLICED_1920_TO_1950, CONCATENATED_DATA
+from paths import DOWNLOADED_ODATA_DIR, RESAMPLED_YEARLY_AVG, TIME_SLICED_ODATA_1920_TO_1950, CONCATENATED_ODATA
 import xarray
 from os import listdir, system
 from multiprocessing import Process

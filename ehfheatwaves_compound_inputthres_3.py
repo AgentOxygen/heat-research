@@ -1,6 +1,17 @@
+import os
 import warnings
 warnings.filterwarnings('ignore')
 import sys
+import cProfile, pstats, io
+from pstats import SortKey
+from multiprocessing import Process, Queue
+from uuid import uuid4
+from os import listdir, remove, mkdir
+from os.path import isdir
+
+pr = cProfile.Profile()
+pr.enable()
+
 try:
     modulename = 'pandas'
     import pandas as pd
@@ -127,7 +138,7 @@ elif calendar=='360_day':
     class calendar360():
         def __init__(self,sdate,edate):
             self.year = np.repeat(range(sdate.year,edate.year+1), 360, 0)
-            nyears = len(xrange(sdate.year,edate.year+1))
+            nyears = len(range(sdate.year,edate.year+1))
             self.month = np.tile(np.repeat(range(1,12+1), 30, 0), nyears)
             self.day = np.tile(np.tile(range(1,30+1), 12), nyears)
             if (sdate.day!=1)|(edate.month!=1):
@@ -281,15 +292,24 @@ tnexceed[tnexceed>0] = tmin[tnexceed>0]
 
 nyears = len(range(first_year,daylast.year+1))
 
+# Save to netCDF
+try:
+    model = options.model
+    realization = options.ensrn
+    if realization==u'N/A': realization = u'r1i1p1'
+except AttributeError:
+    model = ''
+    realization = ''
+try:
+    space = (tmaxnc.dimensions['lat'].__len__(),tmaxnc.dimensions['lon'].__len__())
+    lonname = 'lon'
+    latname = 'lat'
+except KeyError:
+    lonname = 'longitude'
+    latname = 'latitude'
+    space = (tmaxnc.dimensions['latitude'].__len__(),tmaxnc.dimensions['longitude'].__len__())
 
-###########DEFINTION-el1-bmax1-e2l1-dm1####################
-# Inputs
-bmax = 1 #maximum length of a break
-e2length = 1 #required length of heat waves that can compound
-elength = 1 #required length of first heat wave(>=e2length)
-dmin = 1 #required minimum number of hot days for compound event
-
-def identify_hw(ehfs):
+def identify_hw(ehfs, bmax, elength, e2length, dmin):
     """identify_hw locates heatwaves from EHF and returns duration indicators hw, chw, ahw.
     """
      # Agregate consecutive days with EHF>0, and consecutive days where EHF<0 (not heat wave)
@@ -386,7 +406,7 @@ def identify_hw(ehfs):
     ahw1 = ahw-ahw2
     return hw, chw, ahw, ahw1, ahw2
 
-def hw_aspects(EHF, season, hemisphere):
+def hw_aspects(EHF, season, hemisphere, tmp_out_path, bmax, elength, e2length, dmin):
     """hw_aspects takes EHF values or temp 90pct exceedences identifies
     heatwaves and calculates seasonal aspects.
     """
@@ -420,15 +440,14 @@ def hw_aspects(EHF, season, hemisphere):
     AHW1D = HWN.copy()
     AHW2F = HWN.copy()
     AHW2D = HWN.copy()
-    # Loop over years
-    for iyear, year in enumerate(range(first_year,daylast.year)):
-        if (year==daylast.year): continue # Incomplete yr
+
+    def calculate_stats_for_year(out_path, uuid_, iyear_, year_):
         # Select this years season
         allowance = 0 # For including heatwave days after the end of the season
         ifrom = startday + daysinyear*iyear
         ito = endday + daysinyear*iyear + allowance
         EHF_i = EHF[ifrom:ito,...]
-        hw_i, chw_i, ahw_i, ahw1_i, ahw2_i = identify_hw(EHF_i)
+        hw_i, chw_i, ahw_i, ahw1_i, ahw2_i = identify_hw(EHF_i, bmax, elength, e2length, dmin)
         # Remove events that start after the end of the season and before start
         EHF_i = EHF_i[0:,...]
         hw_i = hw_i[0:]
@@ -437,27 +456,166 @@ def hw_aspects(EHF, season, hemisphere):
         ahw1_i = ahw1_i[0:]
         ahw2_i = ahw2_i[0:]
         # Calculate metrics
-        HWN[iyear,...] = (hw_i>0).sum(axis=0)
-        HWF[iyear,...] = hw_i.sum(axis=0)
-        HWD[iyear,...] = hw_i.max(axis=0)
-        CHWN[iyear,...] = (chw_i>0).sum(axis=0)
-        CHWF[iyear,...] = chw_i.sum(axis=0)
-        CHWD[iyear,...] = chw_i.max(axis=0)
-        AHWN[iyear,...] = (ahw_i>0).sum(axis=0)
-        AHWF[iyear,...] = ahw_i.sum(axis=0)
-        AHWD[iyear,...] = ahw_i.max(axis=0)
-        AHW1N[iyear,...] = (ahw1_i>0).sum(axis=0)
-        AHW1F[iyear,...] = ahw1_i.sum(axis=0)
-        AHW1D[iyear,...] = ahw1_i.max(axis=0)
-        AHW2F[iyear,...] = ahw2_i.sum(axis=0)
-        AHW2D[iyear,...] = ahw2_i.max(axis=0)
-    return HWN, HWF, HWD, CHWN, CHWF, CHWD, AHWN, AHWF, AHWD, AHW1N, AHW1F, AHW1D, AHW2F, AHW2D
+        with open(f"{out_path}{iyear_}-HWN-{uuid_}.npy", 'wb') as f:
+            np.save(f, (hw_i>0).sum(axis=0))
+        with open(f"{out_path}{iyear_}-HWF-{uuid_}.npy", 'wb') as f:
+            np.save(f, hw_i.sum(axis=0))
+        with open(f"{out_path}{iyear_}-HWD-{uuid_}.npy", 'wb') as f:
+            np.save(f, hw_i.max(axis=0))
+        with open(f"{out_path}{iyear_}-CHWN-{uuid_}.npy", 'wb') as f:
+            np.save(f, (chw_i>0).sum(axis=0))
+        with open(f"{out_path}{iyear_}-CHWF-{uuid_}.npy", 'wb') as f:
+            np.save(f, chw_i.sum(axis=0))
+        with open(f"{out_path}{iyear_}-CHWD-{uuid_}.npy", 'wb') as f:
+            np.save(f, chw_i.max(axis=0))
+        with open(f"{out_path}{iyear_}-AHWN-{uuid_}.npy", 'wb') as f:
+            np.save(f, (ahw_i>0).sum(axis=0))
+        with open(f"{out_path}{iyear_}-AHWF-{uuid_}.npy", 'wb') as f:
+            np.save(f, ahw_i.sum(axis=0))
+        with open(f"{out_path}{iyear_}-AHWD-{uuid_}.npy", 'wb') as f:
+            np.save(f, ahw_i.max(axis=0))
+        with open(f"{out_path}{iyear_}-AHW1N-{uuid_}.npy", 'wb') as f:
+            np.save(f, (ahw1_i>0).sum(axis=0))
+        with open(f"{out_path}{iyear_}-AHW1F-{uuid_}.npy", 'wb') as f:
+            np.save(f, ahw1_i.sum(axis=0))
+        with open(f"{out_path}{iyear_}-AHW1D-{uuid_}.npy", 'wb') as f:
+            np.save(f, ahw1_i.max(axis=0))
+        with open(f"{out_path}{iyear_}-AHW2F-{uuid_}.npy", 'wb') as f:
+            np.save(f, ahw2_i.sum(axis=0))
+        with open(f"{out_path}{iyear_}-AHW2D-{uuid_}.npy", 'wb') as f:
+            np.save(f, ahw2_i.max(axis=0))
+
+    uuid = str(uuid4())
+    if not isdir(tmp_out_path):
+        os.mkdir(tmp_out_path)
+
+    processes = []
+    for iyear, year in enumerate(range(first_year, daylast.year)):
+        if year == daylast.year:
+            continue  # Incomplete yr
+        proc = Process(target=calculate_stats_for_year, args=(tmp_out_path, uuid, iyear, year,))
+        proc.daemon = True
+        proc.start()
+        processes.append(proc)
+
+    for process in processes:
+        process.join()
+    out_path = tmp_out_path
+    uuid_ = uuid
+
+    # Loop over years
+    for iyear, year in enumerate(range(first_year, daylast.year)):
+        with open(f"{tmp_out_path}{iyear}-HWN-{uuid}.npy", 'rb')as f:
+            HWN[iyear,...] = np.load(f)
+    with open(f"{out_path}completed-HWN-{uuid_}.npy", 'wb') as f:
+        np.save(f, HWN)
+    del HWN
+
+    for iyear, year in enumerate(range(first_year, daylast.year)):
+        with open(f"{tmp_out_path}{iyear}-HWF-{uuid}.npy", 'rb')as f:
+            HWF[iyear,...] = np.load(f)
+    with open(f"{out_path}completed-HWF-{uuid_}.npy", 'wb') as f:
+        np.save(f, HWF)
+    del HWF
+
+    for iyear, year in enumerate(range(first_year, daylast.year)):
+        with open(f"{tmp_out_path}{iyear}-HWD-{uuid}.npy", 'rb')as f:
+            HWD[iyear,...] = np.load(f)
+    with open(f"{out_path}completed-HWD-{uuid_}.npy", 'wb') as f:
+        np.save(f, HWD)
+    del HWD
+
+    for iyear, year in enumerate(range(first_year, daylast.year)):
+        with open(f"{tmp_out_path}{iyear}-CHWN-{uuid}.npy", 'rb')as f:
+            CHWN[iyear,...] = np.load(f)
+    with open(f"{out_path}completed-CHWN-{uuid_}.npy", 'wb') as f:
+        np.save(f, CHWN)
+    del CHWN
+
+    for iyear, year in enumerate(range(first_year, daylast.year)):
+        with open(f"{tmp_out_path}{iyear}-CHWF-{uuid}.npy", 'rb')as f:
+            CHWF[iyear,...] = np.load(f)
+    with open(f"{out_path}completed-CHWF-{uuid_}.npy", 'wb') as f:
+        np.save(f, CHWF)
+    del CHWF
+
+    for iyear, year in enumerate(range(first_year, daylast.year)):
+        with open(f"{tmp_out_path}{iyear}-CHWD-{uuid}.npy", 'rb')as f:
+            CHWD[iyear,...] = np.load(f)
+    with open(f"{out_path}completed-CHWD-{uuid_}.npy", 'wb') as f:
+        np.save(f, CHWD)
+    del CHWD
+
+    for iyear, year in enumerate(range(first_year, daylast.year)):
+        with open(f"{tmp_out_path}{iyear}-AHWN-{uuid}.npy", 'rb')as f:
+            AHWN[iyear,...] = np.load(f)
+    with open(f"{out_path}completed-AHWN-{uuid_}.npy", 'wb') as f:
+        np.save(f, AHWN)
+    del AHWN
+
+    for iyear, year in enumerate(range(first_year, daylast.year)):
+        with open(f"{tmp_out_path}{iyear}-AHWF-{uuid}.npy", 'rb')as f:
+            AHWF[iyear,...] = np.load(f)
+    with open(f"{out_path}completed-AHWF-{uuid_}.npy", 'wb') as f:
+        np.save(f, AHWF)
+    del AHWF
+
+    for iyear, year in enumerate(range(first_year, daylast.year)):
+        with open(f"{tmp_out_path}{iyear}-AHWD-{uuid}.npy", 'rb')as f:
+            AHWD[iyear,...] = np.load(f)
+    with open(f"{out_path}completed-AHWD-{uuid_}.npy", 'wb') as f:
+        np.save(f, AHWD)
+    del AHWD
+
+    for iyear, year in enumerate(range(first_year, daylast.year)):
+        with open(f"{tmp_out_path}{iyear}-AHW1N-{uuid}.npy", 'rb')as f:
+            AHW1N[iyear,...] = np.load(f)
+    with open(f"{out_path}completed-AHW1N-{uuid_}.npy", 'wb') as f:
+        np.save(f, AHW1N)
+    del AHW1N
+
+    for iyear, year in enumerate(range(first_year, daylast.year)):
+        with open(f"{tmp_out_path}{iyear}-AHW1F-{uuid}.npy", 'rb')as f:
+            AHW1F[iyear,...] = np.load(f)
+    with open(f"{out_path}completed-AHW1F-{uuid_}.npy", 'wb') as f:
+        np.save(f, AHW1F)
+    del AHW1F
+
+    for iyear, year in enumerate(range(first_year, daylast.year)):
+        with open(f"{tmp_out_path}{iyear}-AHW1D-{uuid}.npy", 'rb')as f:
+            AHW1D[iyear,...] = np.load(f)
+    with open(f"{out_path}completed-AHW1D-{uuid_}.npy", 'wb') as f:
+        np.save(f, AHW1D)
+    del AHW1D
+
+    for iyear, year in enumerate(range(first_year, daylast.year)):
+        with open(f"{tmp_out_path}{iyear}-AHW2F-{uuid}.npy", 'rb')as f:
+            AHW2F[iyear,...] = np.load(f)
+    with open(f"{out_path}completed-AHW2F-{uuid_}.npy", 'wb') as f:
+        np.save(f, AHW2F)
+    del AHW2F
+
+    for iyear, year in enumerate(range(first_year, daylast.year)):
+        with open(f"{tmp_out_path}{iyear}-AHW2D-{uuid}.npy", 'rb')as f:
+            AHW2D[iyear,...] = np.load(f)
+    with open(f"{out_path}completed-AHW2D-{uuid_}.npy", 'wb') as f:
+        np.save(f, AHW2D)
+    del AHW2D
+
+    datasets = listdir(tmp_out_path)
+    tmp_files = [tmp_out_path + name for name in datasets if uuid in name and "completed" not in name]
+    for filename in set(tmp_files):
+        remove(filename)
+
+    return uuid
+
 
 # Calculate metrics year by year
-def split_hemispheres(EHF):
+def split_hemispheres(EHF, bmax, elength, e2length, dmin, north, south, lats):
     """split_hemispheres splits the input data by hemispheres, and glues them
     back together after heatwave calculations.
     """
+    tmp_out_path = "tmp/"
     if south:
         if options.maskfile:
             EHF_s = EHF[:,:(mask[lats<=0]>0).sum()]
@@ -468,8 +626,8 @@ def split_hemispheres(EHF):
         if len(space)>1:
             EHF_s = EHF_s.reshape(EHF_s.shape[0],space[0]*space[1])
         # Southern hemisphere aspects
-        HWN_s, HWF_s, HWD_s, CHWN_s, CHWF_s, CHWD_s, AHWN_s, AHWF_s, AHWD_s, AHW1N_s, AHW1F_s, AHW1D_s, AHW2F_s, AHW2D_s  = \
-                hw_aspects(EHF_s, season, 'south')
+        uuid_s = hw_aspects(EHF_s, season, 'south', tmp_out_path, bmax, elength, e2length, dmin)
+        # HWN_s, HWF_s, HWD_s, CHWN_s, CHWF_s, CHWD_s, AHWN_s, AHWF_s, AHWD_s, AHW1N_s, AHW1F_s, AHW1D_s, AHW2F_s, AHW2D_s  = \
         del EHF_s
     if north:
         if options.maskfile:
@@ -481,90 +639,272 @@ def split_hemispheres(EHF):
         if len(space)>1:
             EHF_n = EHF_n.reshape(EHF_n.shape[0],space[0]*space[1])
         # Northern hemisphere aspects
-        HWN_n, HWF_n, HWD_n, CHWN_n, CHWF_n, CHWD_n, AHWN_n, AHWF_n, AHWD_n, AHW1N_n, AHW1F_n, AHW1D_n, AHW2F_n, AHW2D_n = \
-                hw_aspects(EHF_n, season, 'north')
+        # HWN_n, HWF_n, HWD_n, CHWN_n, CHWF_n, CHWD_n, AHWN_n, AHWF_n, AHWD_n, AHW1N_n, AHW1F_n, AHW1D_n, AHW2F_n, AHW2D_n = \
+        uuid_n = hw_aspects(EHF_n, season, 'north', tmp_out_path, bmax, elength, e2length, dmin)
         del EHF_n
     # Glue hemispheres back together
     if north and south:
+        with open(f"{tmp_out_path}completed-HWN-{uuid_n}.npy", 'rb') as f:
+            HWN_n = np.load(f)
+        with open(f"{tmp_out_path}completed-HWN-{uuid_s}.npy", 'rb') as f:
+            HWN_s = np.load(f)
         HWN = np.append(HWN_s, HWN_n, axis=1)
+        del HWN_s
+        del HWN_n
+
+        with open(f"{tmp_out_path}completed-HWF-{uuid_n}.npy", 'rb') as f:
+            HWF_n = np.load(f)
+        with open(f"{tmp_out_path}completed-HWF-{uuid_s}.npy", 'rb') as f:
+            HWF_s = np.load(f)
         HWF = np.append(HWF_s, HWF_n, axis=1)
+        del HWF_s
+        del HWF_n
+
+        with open(f"{tmp_out_path}completed-HWD-{uuid_n}.npy", 'rb') as f:
+            HWD_n = np.load(f)
+        with open(f"{tmp_out_path}completed-HWD-{uuid_s}.npy", 'rb') as f:
+            HWD_s = np.load(f)
         HWD = np.append(HWD_s, HWD_n, axis=1)
+        del HWD_s
+        del HWD_n
+
+        with open(f"{tmp_out_path}completed-CHWN-{uuid_n}.npy", 'rb') as f:
+            CHWN_n = np.load(f)
+        with open(f"{tmp_out_path}completed-CHWN-{uuid_s}.npy", 'rb') as f:
+            CHWN_s = np.load(f)
         CHWN = np.append(CHWN_s, CHWN_n, axis=1)
+        del CHWN_s
+        del CHWN_n
+
+        with open(f"{tmp_out_path}completed-CHWF-{uuid_n}.npy", 'rb') as f:
+            CHWF_n = np.load(f)
+        with open(f"{tmp_out_path}completed-CHWF-{uuid_s}.npy", 'rb') as f:
+            CHWF_s = np.load(f)
         CHWF = np.append(CHWF_s, CHWF_n, axis=1)
+        del CHWF_s
+        del CHWF_n
+
+        with open(f"{tmp_out_path}completed-CHWD-{uuid_n}.npy", 'rb') as f:
+            CHWD_n = np.load(f)
+        with open(f"{tmp_out_path}completed-CHWD-{uuid_s}.npy", 'rb') as f:
+            CHWD_s = np.load(f)
         CHWD = np.append(CHWD_s, CHWD_n, axis=1)
+        del CHWD_s
+        del CHWD_n
+
+        with open(f"{tmp_out_path}completed-AHWN-{uuid_n}.npy", 'rb') as f:
+            AHWN_n = np.load(f)
+        with open(f"{tmp_out_path}completed-AHWN-{uuid_s}.npy", 'rb') as f:
+            AHWN_s = np.load(f)
         AHWN = np.append(AHWN_s, AHWN_n, axis=1)
+        del AHWN_s
+        del AHWN_n
+
+        with open(f"{tmp_out_path}completed-AHWF-{uuid_n}.npy", 'rb') as f:
+            AHWF_n = np.load(f)
+        with open(f"{tmp_out_path}completed-AHWF-{uuid_s}.npy", 'rb') as f:
+            AHWF_s = np.load(f)
         AHWF = np.append(AHWF_s, AHWF_n, axis=1)
+        del AHWF_s
+        del AHWF_n
+
+        with open(f"{tmp_out_path}completed-AHWD-{uuid_n}.npy", 'rb') as f:
+            AHWD_n = np.load(f)
+        with open(f"{tmp_out_path}completed-AHWD-{uuid_s}.npy", 'rb') as f:
+            AHWD_s = np.load(f)
         AHWD = np.append(AHWD_s, AHWD_n, axis=1)
+        del AHWD_s
+        del AHWD_n
+
+        with open(f"{tmp_out_path}completed-AHW1N-{uuid_n}.npy", 'rb') as f:
+            AHW1N_n = np.load(f)
+        with open(f"{tmp_out_path}completed-AHW1N-{uuid_s}.npy", 'rb') as f:
+            AHW1N_s = np.load(f)
         AHW1N = np.append(AHW1N_s, AHW1N_n, axis=1)
+        del AHW1N_s
+        del AHW1N_n
+
+        with open(f"{tmp_out_path}completed-AHW1F-{uuid_n}.npy", 'rb') as f:
+            AHW1F_n = np.load(f)
+        with open(f"{tmp_out_path}completed-AHW1F-{uuid_s}.npy", 'rb') as f:
+            AHW1F_s = np.load(f)
         AHW1F = np.append(AHW1F_s, AHW1F_n, axis=1)
+        del AHW1F_s
+        del AHW1F_n
+
+        with open(f"{tmp_out_path}completed-AHW1D-{uuid_n}.npy", 'rb') as f:
+            AHW1D_n = np.load(f)
+        with open(f"{tmp_out_path}completed-AHW1D-{uuid_s}.npy", 'rb') as f:
+            AHW1D_s = np.load(f)
         AHW1D = np.append(AHW1D_s, AHW1D_n, axis=1)
+        del AHW1D_s
+        del AHW1D_n
+
+        with open(f"{tmp_out_path}completed-AHW2F-{uuid_n}.npy", 'rb') as f:
+            AHW2F_n = np.load(f)
+        with open(f"{tmp_out_path}completed-AHW2F-{uuid_s}.npy", 'rb') as f:
+            AHW2F_s = np.load(f)
         AHW2F = np.append(AHW2F_s, AHW2F_n, axis=1)
+        del AHW2F_s
+        del AHW2F_n
+
+        with open(f"{tmp_out_path}completed-AHW2D-{uuid_n}.npy", 'rb') as f:
+            AHW2D_n = np.load(f)
+        with open(f"{tmp_out_path}completed-AHW2D-{uuid_s}.npy", 'rb') as f:
+            AHW2D_s = np.load(f)
         AHW2D = np.append(AHW2D_s, AHW2D_n, axis=1)
+        del AHW2D_s
+        del AHW2D_n
+
     elif north:
+        with open(f"{tmp_out_path}completed-HWN-{uuid_n}.npy", 'rb') as f:
+            HWN_n = np.load(f)
         HWN = HWN_n
+        del HWN_n
+
+        with open(f"{tmp_out_path}completed-HWF-{uuid_n}.npy", 'rb') as f:
+            HWF_n = np.load(f)
         HWF = HWF_n
+        del HWF_n
+
+        with open(f"{tmp_out_path}completed-HWD-{uuid_n}.npy", 'rb') as f:
+            HWD_n = np.load(f)
         HWD = HWD_n
+        del HWD_n
+
+        with open(f"{tmp_out_path}completed-CHWN-{uuid_n}.npy", 'rb') as f:
+            CHWN_n = np.load(f)
         CHWN = CHWN_n
+        del CHWN_n
+
+        with open(f"{tmp_out_path}completed-CHWF-{uuid_n}.npy", 'rb') as f:
+            CHWF_n = np.load(f)
         CHWF = CHWF_n
+        del CHWF_n
+
+        with open(f"{tmp_out_path}completed-CHWD-{uuid_n}.npy", 'rb') as f:
+            CHWD_n = np.load(f)
         CHWD = CHWD_n
+        del CHWD_n
+
+        with open(f"{tmp_out_path}completed-AHWN-{uuid_n}.npy", 'rb') as f:
+            AHWN_n = np.load(f)
         AHWN = AHWN_n
+        del AHWN_n
+
+        with open(f"{tmp_out_path}completed-AHWF-{uuid_n}.npy", 'rb') as f:
+            AHWF_n = np.load(f)
         AHWF = AHWF_n
+        del AHWF_n
+
+        with open(f"{tmp_out_path}completed-AHWD-{uuid_n}.npy", 'rb') as f:
+            AHWD_n = np.load(f)
         AHWD = AHWD_n
+        del AHWD_n
+
+        with open(f"{tmp_out_path}completed-AHW1N-{uuid_n}.npy", 'rb') as f:
+            AHW1N_n = np.load(f)
         AHW1N = AHW1N_n
+        del AHW1N_n
+
+        with open(f"{tmp_out_path}completed-AHW1F-{uuid_n}.npy", 'rb') as f:
+            AHW1F_n = np.load(f)
         AHW1F = AHW1F_n
+        del AHW1F_n
+
+        with open(f"{tmp_out_path}completed-AHW1D-{uuid_n}.npy", 'rb') as f:
+            AHW1D_n = np.load(f)
         AHW1D = AHW1D_n
+        del AHW1D_n
+
+        with open(f"{tmp_out_path}completed-AHW2F-{uuid_n}.npy", 'rb') as f:
+            AHW2F_n = np.load(f)
         AHW2F = AHW2F_n
+        del AHW2F_n
+
+        with open(f"{tmp_out_path}completed-AHW2D-{uuid_n}.npy", 'rb') as f:
+            AHW2D_n = np.load(f)
         AHW2D = AHW2D_n
+        del AHW2D_n
     elif south:
+        with open(f"{tmp_out_path}completed-HWN-{uuid_s}.npy", 'rb') as f:
+            HWN_s = np.load(f)
         HWN = HWN_s
+        del HWN_s
+
+        with open(f"{tmp_out_path}completed-HWF-{uuid_s}.npy", 'rb') as f:
+            HWF_s = np.load(f)
         HWF = HWF_s
+        del HWF_s
+
+        with open(f"{tmp_out_path}completed-HWD-{uuid_s}.npy", 'rb') as f:
+            HWD_s = np.load(f)
         HWD = HWD_s
+        del HWD_s
+
+        with open(f"{tmp_out_path}completed-CHWN-{uuid_s}.npy", 'rb') as f:
+            CHWN_s = np.load(f)
         CHWN = CHWN_s
+        del CHWN_s
+
+        with open(f"{tmp_out_path}completed-CHWF-{uuid_s}.npy", 'rb') as f:
+            CHWF_s = np.load(f)
         CHWF = CHWF_s
+        del CHWF_s
+
+        with open(f"{tmp_out_path}completed-CHWD-{uuid_s}.npy", 'rb') as f:
+            CHWD_s = np.load(f)
         CHWD = CHWD_s
+        del CHWD_s
+
+        with open(f"{tmp_out_path}completed-AHWN-{uuid_s}.npy", 'rb') as f:
+            AHWN_s = np.load(f)
         AHWN = AHWN_s
+        del AHWN_s
+
+        with open(f"{tmp_out_path}completed-AHWF-{uuid_s}.npy", 'rb') as f:
+            AHWF_s = np.load(f)
         AHWF = AHWF_s
+        del AHWF_s
+
+        with open(f"{tmp_out_path}completed-AHWD-{uuid_s}.npy", 'rb') as f:
+            AHWD_s = np.load(f)
         AHWD = AHWD_s
+        del AHWD_s
+
+        with open(f"{tmp_out_path}completed-AHW1N-{uuid_s}.npy", 'rb') as f:
+            AHW1N_s = np.load(f)
         AHW1N = AHW1N_s
+        del AHW1N_s
+
+        with open(f"{tmp_out_path}completed-AHW1F-{uuid_s}.npy", 'rb') as f:
+            AHW1F_s = np.load(f)
         AHW1F = AHW1F_s
+        del AHW1F_s
+
+        with open(f"{tmp_out_path}completed-AHW1D-{uuid_s}.npy", 'rb') as f:
+            AHW1D_s = np.load(f)
         AHW1D = AHW1D_s
+        del AHW1D_s
+
+        with open(f"{tmp_out_path}completed-AHW2F-{uuid_s}.npy", 'rb') as f:
+            AHW2F_s = np.load(f)
         AHW2F = AHW2F_s
+        del AHW2F_s
+
+        with open(f"{tmp_out_path}completed-AHW2D-{uuid_s}.npy", 'rb') as f:
+            AHW2D_s = np.load(f)
         AHW2D = AHW2D_s
+        del AHW2D_s
+    datasets = listdir(tmp_out_path)
+    tmp_files = [tmp_out_path + name for name in datasets if uuid_s in name or uuid_n in name]
+    for filename in set(tmp_files):
+        remove(filename)
+
     return HWN, HWF, HWD, CHWN, CHWF, CHWD, AHWN, AHWF, AHWD, AHW1N, AHW1F, AHW1D, AHW2F, AHW2D
 
 
-# Split by latitude
-try:
-    lats = tmaxnc.variables['lat'][:]
-except KeyError:
-    lats = tmaxnc.variables['latitude'][:]
-north = (lats>0).any()
-south = (lats<=0).any()
-HWN_tx, HWF_tx, HWD_tx, CHWN_tx, CHWF_tx, CHWD_tx, AHWN_tx, AHWF_tx, AHWD_tx, AHW1N_tx, AHW1F_tx, AHW1D_tx, AHW2F_tx, AHW2D_tx = \
-            split_hemispheres(txexceed)
-HWN_tn, HWF_tn, HWD_tn, CHWN_tn, CHWF_tn, CHWD_tn, AHWN_tn, AHWF_tn, AHWD_tn, AHW1N_tn, AHW1F_tn, AHW1D_tn, AHW2F_tn, AHW2D_tn = \
-            split_hemispheres(tnexceed)
-
-# Save to netCDF
-try:
-    experiment = str(elength).rstrip('0').rstrip('.')+str(bmax).rstrip('0').rstrip('.')+str(e2length).rstrip('0').rstrip('.')+str(dmin).rstrip('0').rstrip('.')
-    model = options.model
-    realization = options.ensrn
-    if realization==u'N/A': realization = u'r1i1p1'
-except AttributeError:
-    experiment = ''
-    model = ''
-    realization = ''
-try:
-    space = (tmaxnc.dimensions['lat'].__len__(),tmaxnc.dimensions['lon'].__len__())
-    lonname = 'lon'
-    latname = 'lat'
-except KeyError:
-    lonname = 'longitude'
-    latname = 'latitude'
-    space = (tmaxnc.dimensions['latitude'].__len__(),tmaxnc.dimensions['longitude'].__len__())
-
-def save_yearly(HWN, HWF, HWD, CHWN, CHWF, CHWD, AHWN, AHWF, AHWD, AHW1N, AHW1F, AHW1D, AHW2F, AHW2D, definition, basedat):
+def save_yearly(HWN, HWF, HWD, CHWN, CHWF, CHWD, AHWN, AHWF, AHWD, AHW1N, AHW1F, AHW1D, AHW2F, AHW2D, definition, basedat, experiment):
     yearlyout = Dataset(output_dir + '%s_heatwaves_%s_r%s_%s_yearly_%s.nc'%(definition,model,realization,experiment,season), 'w')
     yearlyout.createDimension('time', len(range(first_year,
             daylast.year+1)))
@@ -757,150 +1097,42 @@ def save_yearly(HWN, HWF, HWD, CHWN, CHWF, CHWD, AHWN, AHWF, AHWD, AHW1N, AHW1F,
         AHW2Dout[:] = AHW2D.reshape((nyears,)+space)
     yearlyout.close()
 
-save_yearly(HWN_tx,HWF_tx,HWD_tx,CHWN_tx,CHWF_tx,CHWD_tx,AHWN_tx,AHWF_tx,AHWD_tx,AHW1N_tx,AHW1F_tx,AHW1D_tx,AHW2F_tx,AHW2D_tx,'tx%spct'%(str(pcntl).rstrip('.')),'tx')
-save_yearly(HWN_tn,HWF_tn,HWD_tn,CHWN_tn,CHWF_tn,CHWD_tn,AHWN_tn,AHWF_tn,AHWD_tn,AHW1N_tn,AHW1F_tn,AHW1D_tn,AHW2F_tn,AHW2D_tn,'tn%spct'%(str(pcntl).rstrip('.')),'tn')
-
-###########DEFINTION-el3-bmax3-e2l3-dm6####################
-#def definition_el3_bmax3_e2l3_dm6() -> None:
-# Inputs
-elength = 3 #required length of first heat wave(>=e2length)
-bmax = 3 #maximum length of a break
-e2length = 3 #required length of heat waves that can compound
-dmin = 6 #required minimum number of hot days for compound event
 
 # Split by latitude
-HWN_tx, HWF_tx, HWD_tx, CHWN_tx, CHWF_tx, CHWD_tx, AHWN_tx, AHWF_tx, AHWD_tx, AHW1N_tx, AHW1F_tx, AHW1D_tx, AHW2F_tx, AHW2D_tx = \
-            split_hemispheres(txexceed)
-HWN_tn, HWF_tn, HWD_tn, CHWN_tn, CHWF_tn, CHWD_tn, AHWN_tn, AHWF_tn, AHWD_tn, AHW1N_tn, AHW1F_tn, AHW1D_tn, AHW2F_tn, AHW2D_tn = \
-            split_hemispheres(tnexceed)
-
-# Save to netCDF
 try:
-    experiment = str(elength).rstrip('0').rstrip('.')+str(bmax).rstrip('0').rstrip('.')+str(e2length).rstrip('0').rstrip('.')+str(dmin).rstrip('0').rstrip('.')
-except AttributeError:
-    experiment = ''
-save_yearly(HWN_tx,HWF_tx,HWD_tx,CHWN_tx,CHWF_tx,CHWD_tx,AHWN_tx,AHWF_tx,AHWD_tx,AHW1N_tx,AHW1F_tx,AHW1D_tx,AHW2F_tx,AHW2D_tx,'tx%spct'%(str(pcntl).rstrip('.')),'tx')
-save_yearly(HWN_tn,HWF_tn,HWD_tn,CHWN_tn,CHWF_tn,CHWD_tn,AHWN_tn,AHWF_tn,AHWD_tn,AHW1N_tn,AHW1F_tn,AHW1D_tn,AHW2F_tn,AHW2D_tn,'tn%spct'%(str(pcntl).rstrip('.')),'tn')
+    lats = tmaxnc.variables['lat'][:]
+except KeyError:
+    lats = tmaxnc.variables['latitude'][:]
+north = (lats > 0).any()
+south = (lats <= 0).any()
 
 
-###########DEFINTION-el3-bmax3-e2l1-dm4####################
-#def definition_el3_bmax3_e2l1_dm4() -> None:
-# Inputs
-elength = 3 #required length of first heat wave(>=e2length)
-bmax = 3 #maximum length of a break
-e2length = 1 #required length of heat waves that can compound
-dmin = 4 #required minimum number of hot days for compound event
+def calculate_definition(elength, bmax, e2length, dmin) -> None:
+    experiment = f"{elength}{bmax}{e2length}{dmin}"
 
-# Split by latitude
-HWN_tx, HWF_tx, HWD_tx, CHWN_tx, CHWF_tx, CHWD_tx, AHWN_tx, AHWF_tx, AHWD_tx, AHW1N_tx, AHW1F_tx, AHW1D_tx, AHW2F_tx, AHW2D_tx = \
-            split_hemispheres(txexceed)
-HWN_tn, HWF_tn, HWD_tn, CHWN_tn, CHWF_tn, CHWD_tn, AHWN_tn, AHWF_tn, AHWD_tn, AHW1N_tn, AHW1F_tn, AHW1D_tn, AHW2F_tn, AHW2D_tn = \
-            split_hemispheres(tnexceed)
+    HWN_tx, HWF_tx, HWD_tx, CHWN_tx, CHWF_tx, CHWD_tx, AHWN_tx, AHWF_tx, AHWD_tx, AHW1N_tx, AHW1F_tx, AHW1D_tx, AHW2F_tx, AHW2D_tx = \
+        split_hemispheres(txexceed, int(bmax), int(elength), int(e2length), int(dmin), north, south, lats)
+    HWN_tn, HWF_tn, HWD_tn, CHWN_tn, CHWF_tn, CHWD_tn, AHWN_tn, AHWF_tn, AHWD_tn, AHW1N_tn, AHW1F_tn, AHW1D_tn, AHW2F_tn, AHW2D_tn = \
+        split_hemispheres(tnexceed, int(bmax), int(elength), int(e2length), int(dmin), north, south, lats)
 
-# Save to netCDF
-try:
-    experiment = str(elength).rstrip('0').rstrip('.')+str(bmax).rstrip('0').rstrip('.')+str(e2length).rstrip('0').rstrip('.')+str(dmin).rstrip('0').rstrip('.')
-except AttributeError:
-    experiment = ''
-save_yearly(HWN_tx,HWF_tx,HWD_tx,CHWN_tx,CHWF_tx,CHWD_tx,AHWN_tx,AHWF_tx,AHWD_tx,AHW1N_tx,AHW1F_tx,AHW1D_tx,AHW2F_tx,AHW2D_tx,'tx%spct'%(str(pcntl).rstrip('.')),'tx')
-save_yearly(HWN_tn,HWF_tn,HWD_tn,CHWN_tn,CHWF_tn,CHWD_tn,AHWN_tn,AHWF_tn,AHWD_tn,AHW1N_tn,AHW1F_tn,AHW1D_tn,AHW2F_tn,AHW2D_tn,'tn%spct'%(str(pcntl).rstrip('.')),'tn')
+    save_yearly(HWN_tx, HWF_tx, HWD_tx, CHWN_tx, CHWF_tx, CHWD_tx, AHWN_tx, AHWF_tx, AHWD_tx, AHW1N_tx, AHW1F_tx,
+                AHW1D_tx, AHW2F_tx, AHW2D_tx, 'tx%spct' % (str(pcntl).rstrip('.')), 'tx', experiment)
+    save_yearly(HWN_tn, HWF_tn, HWD_tn, CHWN_tn, CHWF_tn, CHWD_tn, AHWN_tn, AHWF_tn, AHWD_tn, AHW1N_tn, AHW1F_tn,
+                AHW1D_tn, AHW2F_tn, AHW2D_tn, 'tn%spct' % (str(pcntl).rstrip('.')), 'tn', experiment)
 
 
-###########DEFINTION-el3-bmax2-e2l3-dm6####################
-#def definition_el3_bmax2_e2l3_dm6() -> None:
-# Inputs
-elength = 3 #required length of first heat wave(>=e2length)
-bmax = 2 #maximum length of a break
-e2length = 3 #required length of heat waves that can compound
-dmin = 6 #required minimum number of hot days for compound event
+#old_definitions_to_run = ["3114", "3336", "3314", "3236", "3214", "3136"]
+definitions_to_run = ["1112", "1212", "1312", "1111"]
 
-# Split by latitude
-HWN_tx, HWF_tx, HWD_tx, CHWN_tx, CHWF_tx, CHWD_tx, AHWN_tx, AHWF_tx, AHWD_tx, AHW1N_tx, AHW1F_tx, AHW1D_tx, AHW2F_tx, AHW2D_tx = \
-            split_hemispheres(txexceed)
-HWN_tn, HWF_tn, HWD_tn, CHWN_tn, CHWF_tn, CHWD_tn, AHWN_tn, AHWF_tn, AHWD_tn, AHW1N_tn, AHW1F_tn, AHW1D_tn, AHW2F_tn, AHW2D_tn = \
-            split_hemispheres(tnexceed)
-
-# Save to netCDF
-try:
-    experiment = str(elength).rstrip('0').rstrip('.')+str(bmax).rstrip('0').rstrip('.')+str(e2length).rstrip('0').rstrip('.')+str(dmin).rstrip('0').rstrip('.')
-except AttributeError:
-    experiment = ''
-save_yearly(HWN_tx,HWF_tx,HWD_tx,CHWN_tx,CHWF_tx,CHWD_tx,AHWN_tx,AHWF_tx,AHWD_tx,AHW1N_tx,AHW1F_tx,AHW1D_tx,AHW2F_tx,AHW2D_tx,'tx%spct'%(str(pcntl).rstrip('.')),'tx')
-save_yearly(HWN_tn,HWF_tn,HWD_tn,CHWN_tn,CHWF_tn,CHWD_tn,AHWN_tn,AHWF_tn,AHWD_tn,AHW1N_tn,AHW1F_tn,AHW1D_tn,AHW2F_tn,AHW2D_tn,'tn%spct'%(str(pcntl).rstrip('.')),'tn')
+for definition in definitions_to_run:
+    calculate_definition(definition[0], definition[1], definition[2], definition[3])
 
 
-###########DEFINTION-el3-bmax2-e2l1-dm4####################
-#def definition_el3_bmax2_e2l1_dm4() -> None:
-# Inputs
-elength = 3 #required length of first heat wave(>=e2length)
-bmax = 2 #maximum length of a break
-e2length = 1 #required length of heat waves that can compound
-dmin = 4 #required minimum number of hot days for compound event
-
-# Split by latitude
-HWN_tx, HWF_tx, HWD_tx, CHWN_tx, CHWF_tx, CHWD_tx, AHWN_tx, AHWF_tx, AHWD_tx, AHW1N_tx, AHW1F_tx, AHW1D_tx, AHW2F_tx, AHW2D_tx = \
-            split_hemispheres(txexceed)
-HWN_tn, HWF_tn, HWD_tn, CHWN_tn, CHWF_tn, CHWD_tn, AHWN_tn, AHWF_tn, AHWD_tn, AHW1N_tn, AHW1F_tn, AHW1D_tn, AHW2F_tn, AHW2D_tn = \
-            split_hemispheres(tnexceed)
-
-# Save to netCDF
-try:
-    experiment = str(elength).rstrip('0').rstrip('.')+str(bmax).rstrip('0').rstrip('.')+str(e2length).rstrip('0').rstrip('.')+str(dmin).rstrip('0').rstrip('.')
-except AttributeError:
-    experiment = ''
-save_yearly(HWN_tx,HWF_tx,HWD_tx,CHWN_tx,CHWF_tx,CHWD_tx,AHWN_tx,AHWF_tx,AHWD_tx,AHW1N_tx,AHW1F_tx,AHW1D_tx,AHW2F_tx,AHW2D_tx,'tx%spct'%(str(pcntl).rstrip('.')),'tx')
-save_yearly(HWN_tn,HWF_tn,HWD_tn,CHWN_tn,CHWF_tn,CHWD_tn,AHWN_tn,AHWF_tn,AHWD_tn,AHW1N_tn,AHW1F_tn,AHW1D_tn,AHW2F_tn,AHW2D_tn,'tn%spct'%(str(pcntl).rstrip('.')),'tn')
-
-
-###########DEFINTION-el3-bmax1-e2l3-dm6####################
-#def definition_el3_bmax1_e2l3_dm6() -> None:
-# Inputs
-elength = 3 #required length of first heat wave(>=e2length)
-bmax = 1 #maximum length of a break
-e2length = 3 #required length of heat waves that can compound
-dmin = 6 #required minimum number of hot days for compound event
-
-# Split by latitude
-HWN_tx, HWF_tx, HWD_tx, CHWN_tx, CHWF_tx, CHWD_tx, AHWN_tx, AHWF_tx, AHWD_tx, AHW1N_tx, AHW1F_tx, AHW1D_tx, AHW2F_tx, AHW2D_tx = \
-            split_hemispheres(txexceed)
-HWN_tn, HWF_tn, HWD_tn, CHWN_tn, CHWF_tn, CHWD_tn, AHWN_tn, AHWF_tn, AHWD_tn, AHW1N_tn, AHW1F_tn, AHW1D_tn, AHW2F_tn, AHW2D_tn = \
-            split_hemispheres(tnexceed)
-
-# Save to netCDF
-try:
-    experiment = str(elength).rstrip('0').rstrip('.')+str(bmax).rstrip('0').rstrip('.')+str(e2length).rstrip('0').rstrip('.')+str(dmin).rstrip('0').rstrip('.')
-except AttributeError:
-    experiment = ''
-save_yearly(HWN_tx,HWF_tx,HWD_tx,CHWN_tx,CHWF_tx,CHWD_tx,AHWN_tx,AHWF_tx,AHWD_tx,AHW1N_tx,AHW1F_tx,AHW1D_tx,AHW2F_tx,AHW2D_tx,'tx%spct'%(str(pcntl).rstrip('.')),'tx')
-save_yearly(HWN_tn,HWF_tn,HWD_tn,CHWN_tn,CHWF_tn,CHWD_tn,AHWN_tn,AHWF_tn,AHWD_tn,AHW1N_tn,AHW1F_tn,AHW1D_tn,AHW2F_tn,AHW2D_tn,'tn%spct'%(str(pcntl).rstrip('.')),'tn')
-
-
-###########DEFINTION-el3-bmax1-e2l1-dm4####################
-#def definition_el3_bmax1_e2l1_dm4() -> None:
-# Inputs
-elength = 3 #required length of first heat wave(>=e2length)
-bmax = 1 #maximum length of a break
-e2length = 1 #required length of heat waves that can compound
-dmin = 4 #required minimum number of hot days for compound event
-
-# Split by latitude
-HWN_tx, HWF_tx, HWD_tx, CHWN_tx, CHWF_tx, CHWD_tx, AHWN_tx, AHWF_tx, AHWD_tx, AHW1N_tx, AHW1F_tx, AHW1D_tx, AHW2F_tx, AHW2D_tx = \
-            split_hemispheres(txexceed)
-HWN_tn, HWF_tn, HWD_tn, CHWN_tn, CHWF_tn, CHWD_tn, AHWN_tn, AHWF_tn, AHWD_tn, AHW1N_tn, AHW1F_tn, AHW1D_tn, AHW2F_tn, AHW2D_tn = \
-            split_hemispheres(tnexceed)
-
-# Save to netCDF
-try:
-    experiment = str(elength).rstrip('0').rstrip('.')+str(bmax).rstrip('0').rstrip('.')+str(e2length).rstrip('0').rstrip('.')+str(dmin).rstrip('0').rstrip('.')
-except AttributeError:
-    experiment = ''
-save_yearly(HWN_tx,HWF_tx,HWD_tx,CHWN_tx,CHWF_tx,CHWD_tx,AHWN_tx,AHWF_tx,AHWD_tx,AHW1N_tx,AHW1F_tx,AHW1D_tx,AHW2F_tx,AHW2D_tx,'tx%spct'%(str(pcntl).rstrip('.')),'tx')
-save_yearly(HWN_tn,HWF_tn,HWD_tn,CHWN_tn,CHWF_tn,CHWD_tn,AHWN_tn,AHWF_tn,AHWD_tn,AHW1N_tn,AHW1F_tn,AHW1D_tn,AHW2F_tn,AHW2D_tn,'tn%spct'%(str(pcntl).rstrip('.')),'tn')
-
-
-# definition_el3_bmax3_e2l3_dm6()
-# definition_el3_bmax3_e2l1_dm4()
-# definition_el3_bmax2_e2l3_dm6()
-# definition_el3_bmax2_e2l1_dm4()
-# definition_el3_bmax1_e2l3_dm6()
-# definition_el3_bmax1_e2l1_dm4()
+################### Profiler stuff
+pr.disable()
+s = io.StringIO()
+sortby = SortKey.CUMULATIVE
+ps = pstats.Stats(pr, stream=s).sort_stats(sortby)
+ps.print_stats()
+print(s.getvalue())
+###################
