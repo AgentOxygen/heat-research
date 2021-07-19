@@ -332,15 +332,18 @@ def output_merra2_maps(exp_num: str, variable: str, out_dir: str, pdf=None) -> N
     ax4.set_title(f"MERRA2 {variable} Max. Top 90 Perc.")
     ax4.coastlines()
 
-    max_compare = ((ensemble_max_avg - merra2_max) / merra2_max).fillna(0)
-    max_compare.plot(ax=ax5, cmap='seismic', rasterized=True)
-    ax5.set_title(f"(Model - MERRA2) {variable} Max. Top 90 Perc.")
+    vmin = -2
+    vmax = 2
+    norm = colors.TwoSlopeNorm(vmin=vmin, vcenter=0, vmax=vmax)
+
+    max_compare = ((ensemble_max_avg - merra2_max) / merra2_max)
+    max_compare.where(min_compare < vmax).plot(ax=ax5, cmap='seismic', vmax=vmax, vmin=vmin, norm=norm, rasterized=True)
+    ax5.set_title(f"(Model - MERRA2) / MERRA2 {variable} Max. Top 90 Perc.")
     ax5.coastlines()
 
-    min_compare = ((ensemble_min_avg - merra2_min) / merra2_min).fillna(0)
-    print(min_compare)
-    min_compare.plot(ax=ax6, cmap='seismic', rasterized=True)
-    ax6.set_title(f"(Model - MERRA2) {variable} Min. Top 90 Perc.")
+    min_compare = ((ensemble_min_avg - merra2_min) / merra2_min)
+    min_compare.where(min_compare < vmax).plot(ax=ax6, cmap='seismic', vmax=vmax, vmin=vmin, norm=norm, rasterized=True)
+    ax6.set_title(f"(Model - MERRA2) / MERRA2 {variable} Min. Top 90 Perc.")
     ax6.coastlines()
 
     print("Saving image...")
@@ -660,7 +663,5 @@ def generate_figure_pdf() -> None:
 def bar_graphs() -> None:
     all_dataset = xarray.open_dataset(paths.get_paths_heat_output_avg()[0][0])
 
-
-output_merra2_maps("3114", "HWF", FIGURE_IMAGE_OUTPUT)
 
 

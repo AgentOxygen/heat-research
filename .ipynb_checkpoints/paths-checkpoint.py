@@ -29,6 +29,7 @@ OUT_ALL_AVGS_1980_2000 = "/projects/dgs/persad_research/heat_research/postproces
 SAMPLE_NC = "/projects/dgs/persad_research/heat_research/postprocessing/heat_output_1920_1950_baseline/" \
             "former-XGHG-4-tx9pct_heatwaves_CESM2_rNone_3336_yearly_summer.nc"
 MERRA2_DATA = "/projects/dgs/persad_research/heat_research/postprocessing/MERRA2_shift_0_heat_output/"
+RAW_MERRA2_DATA = "/projects/dgs/persad_research/heat_research/MERRA2_data/MERRA2_1980-2015.nc"
 FIGURE_IMAGE_OUTPUT = "/home/persad_users/csc3323/figure_outputs/"
 
 
@@ -217,10 +218,10 @@ def get_paths_cdata() -> tuple:
            trefhtmin_all_em, trefhtmin_xaer_em, trefhtmin_xghg_em
 
 
-def get_1980_2000_ALL_datasets() -> tuple:
+def get_1980_2000_ALL_datasets(exp_num: str) -> tuple:
     datasets = listdir(HEAT_OUTPUT_1980_2000_BASE)
-    max_all_datasets = [HEAT_OUTPUT_1980_2000_BASE + name for name in datasets if "tx" in name]
-    min_all_datasets = [HEAT_OUTPUT_1980_2000_BASE + name for name in datasets if "tn" in name]
+    max_all_datasets = [HEAT_OUTPUT_1980_2000_BASE + name for name in datasets if "tx" in name and exp_num in name]
+    min_all_datasets = [HEAT_OUTPUT_1980_2000_BASE + name for name in datasets if "tn" in name and exp_num in name]
 
     return max_all_datasets, min_all_datasets
 
@@ -234,10 +235,27 @@ def get_paths_heat_output_avg(tmp_type: str = "min", exp_num: str = "3114") -> t
     """
     dataset_names = listdir(OUT_EM_AVGS_1920_1950)
     all_datasets = [OUT_EM_AVGS_1920_1950 + name for name in dataset_names if 'ALL' in name and
-                    tmp_type in name and exp_num in name]
+                    tmp_type in name and exp_num in name][0]
     xghg_datasets = [OUT_EM_AVGS_1920_1950 + name for name in dataset_names if 'XGHG' in name and
-                     tmp_type in name and exp_num in name]
+                     tmp_type in name and exp_num in name][0]
     xaer_datasets = [OUT_EM_AVGS_1920_1950 + name for name in dataset_names if 'XAER' in name and
-                     tmp_type in name and exp_num in name]
+                     tmp_type in name and exp_num in name][0]
 
     return all_datasets, xghg_datasets, xaer_datasets
+
+
+def get_paths_heat_output_concat() -> tuple:
+    datasets = listdir(HEAT_OUTPUT_CONCAT_1920_1950_BASE)
+    max_xaer_datasets = [HEAT_OUTPUT_CONCAT_1920_1950_BASE + name for name in datasets 
+                         if "tx" in name and "XAER" in name]
+    max_xghg_datasets = [HEAT_OUTPUT_CONCAT_1920_1950_BASE + name for name in datasets 
+                         if "tx" in name and "XGHG" in name]
+    max_all_datasets = [HEAT_OUTPUT_CONCAT_1920_1950_BASE + name for name in datasets 
+                        if "tx" in name and "ALL" in name]
+    min_xaer_datasets = [HEAT_OUTPUT_CONCAT_1920_1950_BASE + name for name in datasets 
+                         if "tn" in name and "XAER" in name]
+    min_xghg_datasets = [HEAT_OUTPUT_CONCAT_1920_1950_BASE + name for name in datasets 
+                         if "tn" in name and "XGHG" in name]
+    min_all_datasets = [HEAT_OUTPUT_CONCAT_1920_1950_BASE + name for name in datasets 
+                        if "tn" in name and "ALL" in name]
+    return max_all_datasets, max_xghg_datasets, max_xaer_datasets, min_all_datasets, min_xghg_datasets, min_xaer_datasets
