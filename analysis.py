@@ -2,6 +2,7 @@ import sys
 import pandas as pd
 import numpy as np
 import datetime as dt
+import xarray
 import math
 from uuid import uuid4
 import netcdftime
@@ -12,11 +13,17 @@ from netCDF4 import MFDataset, MFTime, Dataset, num2date
 from optparse import OptionParser
 from multiprocessing import Process
 import threading
-
 import cProfile, pstats, io
 from pstats import SortKey
+import xesmf as xe
 
-def calculate_thresholds(output_path: str, tmaxfile: str, tmaxvname: str, tminfile: str, tminvname: str, bpfx: str=None, bpfn: str=None, maskfile: str=None, maskvname: str="sftlf", timevname: str="time", season: str="summer", pcntl: float=0.9, bp: str="1920-1950", dailyout: bool=True, dailyonly: bool=True, t90pc: bool=True) -> bool:
+
+def bilinear_interpolation(data_to_interpolate: xarray.DataArray, data_to_match: xarray.DataArray) -> xarray.DataArray:
+    regridder = xe.Regridder(data_to_interpolate, data_to_match, 'bilinear')
+    return regridder(data_to_interpolate)
+
+
+def calculate_thresholds(output_path: str, tmaxfile: str, tmaxvname: str, tminfile: str, tminvname: str, bpfx: str=None, bpfn: str=None, maskfile: str=None, maskvname: str="sftlf", timevname: str="time", season: str="summer", pcntl: float=0.9, bp: str="1920-1950", dailyout: bool=True, dailyonly: bool=True, t90pc: bool=True, control_data: bool=False) -> bool:
     """
     tmaxfile -> file containing tmax
     tmaxvname -> tmax variable name
@@ -34,6 +41,7 @@ def calculate_thresholds(output_path: str, tmaxfile: str, tmaxvname: str, tminfi
     dailyonly -> output only daily values and suppress yearly output. Default True
     t90pc -> Calculate tx90pc and tn90pc heatwaves
     output_path -> File path to output threshold to
+    control_data -> modifies  for calculating thresholds for control data. Default is False
     """
     
     if not tmaxfile or not tminfile:
@@ -42,13 +50,13 @@ def calculate_thresholds(output_path: str, tmaxfile: str, tmaxvname: str, tminfi
     if not maskfile:
         print ("You didn't specify a land-sea mask. It's faster if you do,"
             "so this might take a while.")
-    if len(bp)!=9:
-        print ("Incorect base period format.")
+    if len(bp.split("-"))!=2:
+        print ("Incorrect base period format.")
         return False
     else:
-        bpstart = int(bp[0:4])
-        bpend = int(bp[5:9])
-        print(bp)
+        bpstart = int(bp.split("-")[0])
+        bpend = int(bp.split("-")[1])
+        print(f"{bpstart}-{bpend}")
     if (season!='summer')&(season!='winter'):
         print ("Use either summer or winter.")
         return False
@@ -82,6 +90,7 @@ def calculate_thresholds(output_path: str, tmaxfile: str, tmaxvname: str, tminfi
         print ('Unrecognized calendar. Using gregorian.')
         calendar = 'gregorian'
     elif calendar=='360_day':
+        print("360 Day Calendar")
         daysinyear = 360
         # 360 day season start and end indices
         SHS = (301,451)
@@ -111,6 +120,7 @@ def calculate_thresholds(output_path: str, tmaxfile: str, tmaxvname: str, tminfi
         if (daylast.day!=30)|(daylast.month!=12):
             shorten = 30*(13-daylast.month) - daylast.day
     else:
+        print("365 Day Calendar")
         daysinyear = 365
         # 365 day season start and end indices
         SHS = (304,455)
@@ -127,8 +137,10 @@ def calculate_thresholds(output_path: str, tmaxfile: str, tmaxvname: str, tminfi
                     calendar=calendar)
     #####added to correct for noleap calendar
         if calendar == 'noleap':
+            print("No-leap calendar")
             dates = period_range(str(dayone), str(daylast), without_leap = True)
         else:
+            print("Leap calendar")
             dates = period_range(str(dayone), str(daylast), without_leap = False)
     ########
     #    dates = pd.period_range(str(dayone), str(daylast))
@@ -178,15 +190,17 @@ def calculate_thresholds(output_path: str, tmaxfile: str, tmaxvname: str, tminfi
     bpdaylast = num2date(bptime[-1], bptime.units, calendar=calendar)
     #Added to correct for noleap calendar#########
     if calendar == 'noleap':
+        print("Period Range without leap")
         bpdates = period_range(str(bpdayone), str(bpdaylast), without_leap = True)
     else:
+        print("Period Range with leap")
         bpdates = period_range(str(bpdayone), str(bpdaylast), without_leap = False)
     ###########
     dates_base = bpdates[(bpstart<=bpdates.year)&(bpdates.year<=bpend)]
     print(f"Base: {dates_base}")
 
 
-    tmax = tmaxnc.variables[vname][(bpstart<=dates.year)&(dates.year<=bpend)]
+    tmax = tmaxnc.variables[vname][(bpstart<=dates.year)&(dates.year<=(bpend))]
     if len(tmax.shape)==4: tmax = tmax.squeeze()
     original_shape = tmax.shape
     if maskfile:
@@ -202,19 +216,18 @@ def calculate_thresholds(output_path: str, tmaxfile: str, tmaxvname: str, tminfi
     tave_base = (tmax + tmin)/2.
 
     # Remove leap days in gregorian calendars
-    if (calendar=='gregorian')|(calendar=='proleptic_gregorian')|\
-                (calendar=='standard')|(calendar=='julian'):
+    if (calendar=='gregorian')|(calendar=='proleptic_gregorian')|(calendar=='standard')|(calendar=='julian'):
         tave_base = tave_base[(dates_base.month!=2)|(dates_base.day!=29),...]
         tmax = tmax[(dates_base.month!=2)|(dates_base.day!=29),...]
         tmin = tmin[(dates_base.month!=2)|(dates_base.day!=29),...]
         del dates_base
-
-    # Remove incomplete starting year
+        
+#     # Remove incomplete starting year
     first_year = dayone.year
-    if (dayone.month!=1)|(dayone.day!=1):
+    if (dayone.month!=1)|(dayone.day!=1) and not control_data:
         first_year = dayone.year+1
         start = np.argmax(dates.year==first_year)
-        tave = tave[start:,...]
+        #tave = tave[start:,...]
         tmax = tmax[start:,...]
         tmin = tmin[start:,...]
     
@@ -229,6 +242,7 @@ def calculate_thresholds(output_path: str, tmaxfile: str, tmaxvname: str, tminfi
     window[int(-np.floor(wsize/2.)):] = 1
     window[:int(np.ceil(wsize/2.))] = 1
     window = np.tile(window,bpend+1-bpstart)
+    
     parameter = False
     for day in range(daysinyear):
         txpct[day,...] = np.quantile(tmax[window,...], pcntl, axis=0)
@@ -365,7 +379,7 @@ def calculate_heatwave_statistics(output_path: str, tmaxfile: str, tminfile: str
         print ("You didn't specify a land-sea mask. It's faster if you do,"
             "so this might take a while.")
     if len(bp)!=9:
-        print ("Incorect base period format.")
+        print ("Incorrect base period format.")
         return False
     else:
         bpstart = int(bp[:4])
@@ -1222,7 +1236,7 @@ def calculate_heatwave_statistics(output_path: str, tmaxfile: str, tminfile: str
 
 
     def save_yearly(HWN, HWF, HWD, CHWN, CHWF, CHWD, AHWN, AHWF, AHWD, AHW1N, AHW1F, AHW1D, AHW2F, AHW2D, definition, basedat, experiment, label):
-        yearlyout = Dataset(output_path, 'w')
+        yearlyout = Dataset(output_path + definition + ".nc", 'w')
         yearlyout.createDimension('time', len(range(first_year,
                 daylast.year+1)))
         yearlyout.createDimension('lon', tmaxnc.dimensions[lonname].__len__())

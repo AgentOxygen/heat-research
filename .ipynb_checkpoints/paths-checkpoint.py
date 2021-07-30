@@ -84,12 +84,16 @@ def heat_out_merra2() -> list:
 
 def control_threshold() -> str:
     """Path to pre-industrial contro threshold netCDF"""
-    return ""
+    return paths.DIR_PATH + "thresholds/CONTROL/control_threshold.nc"
 
 
-def control_trefht_download() -> list:
-    """Path to downloaded pre-industrial control datasets"""
-    return [DIR_PATH + "/TREFHT/CONTROL/downloads/" + name for name in listdir(DIR_PATH + "/TREFHT/CONTROL/downloads/")]
+def control_downloads() -> list:
+    """Path to downloaded pre-industrial control datasets. Note that the time variables are not in the string format, use control_trefht_formatted()"""
+    trefht = DIR_PATH + "TREFHT/CONTROL/download/b.e11.B1850C5CN.f09_g16.005.cam.h1.TREFHT.19000101-19991231.nc"
+    trefhtmn = DIR_PATH + "TREFHTMN/CONTROL/download/b.e11.B1850C5CN.f09_g16.005.cam.h1.TREFHTMN.19000101-19991231.nc"
+    trefhtmx = DIR_PATH + "TREFHTMX/CONTROL/download/b.e11.B1850C5CN.f09_g16.005.cam.h1.TREFHTMX.19000101-19991231.nc"
+    return trefht, trefhtmn, trefhtmx
+
 
 ## ===================================== HEAT OUTPUTS =====================================
 
