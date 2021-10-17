@@ -5,6 +5,9 @@ DIR_PATH = "/projects/dgs/persad_research/heat_research/data/"
 
 ## ===================================== TREFHT/MN/MX DATA =====================================
 
+def filterby(list_paths: list, str_filter: str):
+    return [path for path in list_paths if str_filter in path]
+
 
 def trefht_members() -> tuple:
     """TREFHT ensemble members for ALL, XGHG, and XAER, concatenated time series"""
@@ -54,8 +57,8 @@ def trefhtmx_members_raw() -> tuple:
     return all_ds, xghg_ds, xaer_ds
 
 
-def thresholds_members_1920_1950() -> tuple:
-    """ALL, XGHG, XAER thresholds for each ensemble member calculated using 1920 to 1950 baseline"""
+def thresholds_members_1920_1950_ALL() -> tuple:
+    """ALL, XGHG, XAER thresholds for each ensemble member calculated using 1920 to 1950 ALL baseline"""
     all_ds = [DIR_PATH + "thresholds/ALL/1920_1950/" + name for name in listdir(DIR_PATH + "thresholds/ALL/1920_1950/")]
     xghg_ds = [DIR_PATH + "thresholds/XGHG/1920_1950/" + name for name in listdir(DIR_PATH + "thresholds/XGHG/1920_1950/")]
     xaer_ds = [DIR_PATH + "thresholds/XAER/1920_1950/" + name for name in listdir(DIR_PATH + "thresholds/XAER//1920_1950")]
@@ -84,7 +87,7 @@ def heat_out_merra2() -> list:
 
 def control_threshold() -> str:
     """Path to pre-industrial contro threshold netCDF"""
-    return paths.DIR_PATH + "thresholds/CONTROL/control_threshold.nc"
+    return DIR_PATH + "thresholds/CONTROL/control_threshold.nc"
 
 
 def control_downloads() -> list:
@@ -98,7 +101,7 @@ def control_downloads() -> list:
 ## ===================================== HEAT OUTPUTS =====================================
 
 
-def heat_out_trefht_tmin_members_1920_1950() -> tuple:
+def heat_out_trefht_tmin_members_1920_1950_ALL() -> tuple:
     """Minimum temperature heat outputs for each ensemble member with 1920 to 1950 baseline"""
     all_ds = [DIR_PATH + "/heat_output/ALL/tmin/" + name for name in listdir(DIR_PATH + "/heat_output/ALL/tmin") if "1980-2000" not in name]
     xghg_ds = [DIR_PATH + "/heat_output/XGHG/tmin/" + name for name in listdir(DIR_PATH + "/heat_output/XGHG/tmin") if "1980-2000" not in name]
@@ -106,42 +109,62 @@ def heat_out_trefht_tmin_members_1920_1950() -> tuple:
     return all_ds, xghg_ds, xaer_ds
 
 
-def heat_out_trefht_tmax_members_1920_1950() -> tuple:
-    """Maximum temperature heat outputs for each ensemble member with 1920 to 1950 baseline"""
+def heat_out_trefht_tmax_members_1920_1950_ALL() -> tuple:
+    """Maximum temperature heat outputs for each ensemble member with 1920 to 1950 ALL baseline"""
     all_ds = [DIR_PATH + "/heat_output/ALL/tmax/" + name for name in listdir(DIR_PATH + "/heat_output/ALL/tmax") if "1980-2000" not in name]
     xghg_ds = [DIR_PATH + "/heat_output/XGHG/tmax/" + name for name in listdir(DIR_PATH + "/heat_output/XGHG/tmax") if "1980-2000" not in name]
     xaer_ds = [DIR_PATH + "/heat_output/XAER/tmax/" + name for name in listdir(DIR_PATH + "/heat_output/XAER/tmax") if "1980-2000" not in name]
     return all_ds, xghg_ds, xaer_ds
 
 
-def heat_out_trefht_tmin_members_1980_2000() -> tuple:
-    """Minimum temperature heat outputs for each ensemble member with 1980 to 2000 baseline"""
+def heat_out_trefht_tmin_members_1980_2000_ALL() -> tuple:
+    """Minimum temperature heat outputs for each ensemble member with 1980 to 2000 ALL baseline"""
     all_ds = [DIR_PATH + "/heat_output/ALL/tmin/" + name for name in listdir(DIR_PATH + "/heat_output/ALL/tmin") if "1980-2000" in name]
     xghg_ds = [DIR_PATH + "/heat_output/XGHG/tmin/" + name for name in listdir(DIR_PATH + "/heat_output/XGHG/tmin") if "1980-2000" in name]
     xaer_ds = [DIR_PATH + "/heat_output/XAER/tmin/" + name for name in listdir(DIR_PATH + "/heat_output/XAER/tmin") if "1980-2000" in name]
     return all_ds, xghg_ds, xaer_ds
 
 
-def heat_out_trefht_tmax_members_1980_2000() -> tuple:
-    """Maximum temperature heat outputs for each ensemble member with 1980 to 2000 baseline"""
+def heat_out_trefht_tmax_members_1980_2000_ALL() -> tuple:
+    """Maximum temperature heat outputs for each ensemble member with 1980 to 2000 ALL baseline"""
     all_ds = [DIR_PATH + "/heat_output/ALL/tmax/" + name for name in listdir(DIR_PATH + "/heat_output/ALL/tmax") if "1980-2000" in name]
     xghg_ds = [DIR_PATH + "/heat_output/XGHG/tmax/" + name for name in listdir(DIR_PATH + "/heat_output/XGHG/tmax") if "1980-2000" in name]
     xaer_ds = [DIR_PATH + "/heat_output/XAER/tmax/" + name for name in listdir(DIR_PATH + "/heat_output/XAER/tmax") if "1980-2000" in name]
     return all_ds, xghg_ds, xaer_ds
 
 
-def heat_out_trefht_tmin_averages_1920_1950() -> tuple:
-    """Minimum temperature heat outputs averaged from each ensemble member with 1920 to 1950 baseline"""
+def heat_out_trefht_tmin_averages_1920_1950_ALL() -> tuple:
+    """Minimum temperature heat outputs averaged from each ensemble member with 1920 to 1950 ALL baseline"""
     all_ds = [DIR_PATH + "/heat_output/ALL/1920_1950_base_avg/" + name for name in listdir(DIR_PATH + "/heat_output/ALL/1920_1950_base_avg") if "min" in name]
     xghg_ds = [DIR_PATH + "/heat_output/XGHG/1920_1950_base_avg/" + name for name in listdir(DIR_PATH + "/heat_output/XGHG/1920_1950_base_avg") if "min" in name]
     xaer_ds = [DIR_PATH + "/heat_output/XAER/1920_1950_base_avg/" + name for name in listdir(DIR_PATH + "/heat_output/XAER/1920_1950_base_avg") if "min" in name]
     return all_ds, xghg_ds, xaer_ds
 
 
-def heat_out_trefht_tmax_averages_1920_1950() -> tuple:
-    """Maximum temperature heat outputs averaged from each ensemble member with 1920 to 1950 baseline"""
+def heat_out_trefht_tmax_averages_1920_1950_ALL() -> tuple:
+    """Maximum temperature heat outputs averaged from each ensemble member with 1920 to 1950 ALL baseline"""
     all_ds = [DIR_PATH + "/heat_output/ALL/1920_1950_base_avg/" + name for name in listdir(DIR_PATH + "/heat_output/ALL/1920_1950_base_avg") if "max" in name]
     xghg_ds = [DIR_PATH + "/heat_output/XGHG/1920_1950_base_avg/" + name for name in listdir(DIR_PATH + "/heat_output/XGHG/1920_1950_base_avg") if "max" in name]
     xaer_ds = [DIR_PATH + "/heat_output/XAER/1920_1950_base_avg/" + name for name in listdir(DIR_PATH + "/heat_output/XAER/1920_1950_base_avg") if "max" in name]
     return all_ds, xghg_ds, xaer_ds
+
+
+def heat_out_trefht_tmin_members_1920_1950_CONTROL() -> tuple:
+    """Minimum temperature heat outputs for each ensemble member with 1920 to 1950 baseline"""
+    all_ds = [DIR_PATH + "/heat_output/ALL/1920_1950_control_base/" + name for name in listdir(DIR_PATH + "/heat_output/ALL/1920_1950_control_base/") if "tn" in name]
+    xghg_ds = [DIR_PATH + "/heat_output/XGHG/1920_1950_control_base/" + name for name in listdir(DIR_PATH + "/heat_output/XGHG/1920_1950_control_base/") if "tn" in name]
+    xaer_ds = [DIR_PATH + "/heat_output/XAER/1920_1950_control_base/" + name for name in listdir(DIR_PATH + "/heat_output/XAER/1920_1950_control_base/") if "tn" in name]
+    return all_ds, xghg_ds, xaer_ds
+
+
+def heat_out_trefht_tmax_members_1920_1950_CONTROL() -> tuple:
+    """Maximum temperature heat outputs for each ensemble member with 1920 to 1950 ALL baseline"""
+    all_ds = [DIR_PATH + "/heat_output/ALL/1920_1950_control_base/" + name for name in listdir(DIR_PATH + "/heat_output/ALL/1920_1950_control_base/") if "tx" in name]
+    xghg_ds = [DIR_PATH + "/heat_output/XGHG/1920_1950_control_base/" + name for name in listdir(DIR_PATH + "/heat_output/XGHG/1920_1950_control_base/") if "tx" in name]
+    xaer_ds = [DIR_PATH + "/heat_output/XAER/1920_1950_control_base/" + name for name in listdir(DIR_PATH + "/heat_output/XAER/1920_1950_control_base/") if "tx" in name]
+    return all_ds, xghg_ds, xaer_ds
+
+
+def population_2020_aggregated() -> str:
+    return DIR_PATH + "/populations/ppp_2020_1km_Aggregated.tif"
 

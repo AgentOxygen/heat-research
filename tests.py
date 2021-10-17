@@ -2,10 +2,15 @@
 
 import unittest
 import paths
+import numpy
+from uuid import uuid4
 from os.path import isfile
 
-class TestingPathFunctions(unittest.TestCase):
 
+class TestingPathFunctions(unittest.TestCase):
+    """
+    Tests paths.py functions and makes sure that all files exist in the correct directories
+    """
     
     def test_trefht_members(self):
         all_ds, xghg_ds, xaer_ds = paths.trefht_members()
@@ -49,15 +54,15 @@ class TestingPathFunctions(unittest.TestCase):
         self.assertEqual(len(xaer_ds), 40)
         
         
-    def test_thresholds_members_1920_1950(self):
-        all_ds, xghg_ds, xaer_ds = paths.thresholds_members_1920_1950()
+    def test_thresholds_members_1920_1950_ALL(self):
+        all_ds, xghg_ds, xaer_ds = paths.thresholds_members_1920_1950_ALL()
         self.assertEqual(len(all_ds), 20)
         self.assertEqual(len(xghg_ds), 20)
         self.assertEqual(len(xaer_ds), 20)
         
     
     def test_control_download(self):
-        controls = paths.control_download()
+        controls = paths.control_downloads()
         self.assertEqual(len(controls), 18)
         
         
@@ -73,23 +78,13 @@ class TestingPathFunctions(unittest.TestCase):
                          msg=f"{len(xaer_ds)} XAER datasets w/ {len(xaer_exp_nums)} definitions")
     
     
-    def test_heat_out_trefht_tmin_members_1920_1950(self):
-        all_ds, xghg_ds, xaer_ds = paths.heat_out_trefht_tmin_members_1920_1950()
+    def test_heat_out_trefht_tmin_members_1920_1950_ALL(self):
+        all_ds, xghg_ds, xaer_ds = paths.heat_out_trefht_tmin_members_1920_1950_ALL()
         self.assert_experiment_definition_to_output_ratios(all_ds, xghg_ds, xaer_ds)
         
     
-    def test_heat_out_trefht_tmax_members_1920_1950(self):
-        all_ds, xghg_ds, xaer_ds = paths.heat_out_trefht_tmax_members_1920_1950()
-        self.assert_experiment_definition_to_output_ratios(all_ds, xghg_ds, xaer_ds)
-        
-        
-    def test_heat_out_trefht_tmin_members_1980_2000(self):
-        all_ds, xghg_ds, xaer_ds = paths.heat_out_trefht_tmin_members_1980_2000()
-        self.assert_experiment_definition_to_output_ratios(all_ds, xghg_ds, xaer_ds)
-        
-        
-    def test_heat_out_trefht_tmax_members_1980_2000(self):
-        all_ds, xghg_ds, xaer_ds = paths.heat_out_trefht_tmax_members_1980_2000()
+    def test_heat_out_trefht_tmax_members_1920_1950_ALL(self):
+        all_ds, xghg_ds, xaer_ds = paths.heat_out_trefht_tmax_members_1920_1950_ALL()
         self.assert_experiment_definition_to_output_ratios(all_ds, xghg_ds, xaer_ds)
         
     
@@ -146,35 +141,56 @@ class TestingPathFunctions(unittest.TestCase):
         self.assertEqual(self.check_ds_files_exist(all_ds, xghg_ds, xaer_ds), True)
         
         
-    def test_thresholds_members_1920_1950_exist(self):
-        all_ds, xghg_ds, xaer_ds = paths.thresholds_members_1920_1950()
+    def test_thresholds_members_1920_1950_ALL_exist(self):
+        all_ds, xghg_ds, xaer_ds = paths.thresholds_members_1920_1950_ALL()
         self.assertEqual(self.check_ds_files_exist(all_ds, xghg_ds, xaer_ds), True)
     
     
     def test_control_download_exist(self):
-        controls = paths.control_download()
+        controls = paths.control_downloads()
         self.assertEqual(self.check_ds_files_exist(controls), True)
     
     def test_heat_out_trefht_tmin_members_1920_1950_exist(self):
-        all_ds, xghg_ds, xaer_ds = paths.heat_out_trefht_tmin_members_1920_1950()
+        all_ds, xghg_ds, xaer_ds = paths.heat_out_trefht_tmin_members_1920_1950_ALL()
         self.assertEqual(self.check_ds_files_exist(all_ds, xghg_ds, xaer_ds), True)
         
     
     def test_heat_out_trefht_tmax_members_1920_1950_exist(self):
-        all_ds, xghg_ds, xaer_ds = paths.heat_out_trefht_tmax_members_1920_1950()
+        all_ds, xghg_ds, xaer_ds = paths.heat_out_trefht_tmax_members_1920_1950_ALL()
         self.assertEqual(self.check_ds_files_exist(all_ds, xghg_ds, xaer_ds), True)
         
         
-    def test_heat_out_trefht_tmin_members_1980_2000_exist(self):
-        all_ds, xghg_ds, xaer_ds = paths.heat_out_trefht_tmin_members_1980_2000()
+    def test_heat_out_trefht_tmin_members_1920_1950_control_exist(self):
+        all_ds, xghg_ds, xaer_ds = paths.heat_out_trefht_tmin_members_1920_1950_CONTROL()
         self.assertEqual(self.check_ds_files_exist(all_ds, xghg_ds, xaer_ds), True)
         
         
-    def test_heat_out_trefht_tmax_members_1980_2000_exist(self):
-        all_ds, xghg_ds, xaer_ds = paths.heat_out_trefht_tmax_members_1980_2000()
+    def test_heat_out_trefht_tmax_members_1920_1950_control_exist(self):
+        all_ds, xghg_ds, xaer_ds = paths.heat_out_trefht_tmax_members_1920_1950_CONTROL()
         self.assertEqual(self.check_ds_files_exist(all_ds, xghg_ds, xaer_ds), True)
         
-
+        
+class TestingAnalysisFunctionality(unittest.TestCase):
+    
+    
+    def test_dask_xarray_averaging(self):
+        # Create 3 random time, lat, lon arrays
+        # Average them together to get control comparison
+        # Output each to a uuid.nc
+        # Import all of them using new open_mfdataset averaging technique
+        # Delete all uuid.nc files
+        # Compare to control (should be equal)
+        pass
+        
+    
+    def test_xarray_time_slicing(self):
+        # Create time, lat, lon array (non random, using just 1s maybe)
+        # Assert average equal constant
+        # Slice
+        # Assert sliced average equals constant
+        pass
+    
+        
 if __name__ == '__main__':
     unittest.main()
 

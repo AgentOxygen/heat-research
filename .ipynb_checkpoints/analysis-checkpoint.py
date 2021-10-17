@@ -17,6 +17,25 @@ import cProfile, pstats, io
 from pstats import SortKey
 import xesmf as xe
 
+def autocorrelation(o_data: xarray.DataArray) -> xarray.DataArray:
+    """
+    Calculates correlation between dataset and itself shifted by one time interval
+    o_data -> Data array with dimensions latitude, longitude, and time
+    """
+    shifted_data = o_data.shift(time=1)
+
+    o_data_vals = np.moveaxis(o_data.values, 0, -1)
+    shifted_data_vals = np.moveaxis(shifted_data.values, 0, -1)
+    correlation = np.zeros((o_data_vals.shape[0], o_data_vals.shape[1]))
+
+    for i in range(0, o_data_vals.shape[0]):
+        for j in range(0, o_data_vals.shape[1]):
+            correlation[i][j] = np.corrcoef(o_data_vals[i][j][0:o_data_vals[i][j].size-1], shifted_data_vals[i][j][1::])
+
+    correlation_data = o_data.mean(dim="time").rename("Autocorrelation")
+    correlation_data.values = correlation
+    return correlation_data
+
 
 def bilinear_interpolation(data_to_interpolate: xarray.DataArray, data_to_match: xarray.DataArray) -> xarray.DataArray:
     regridder = xe.Regridder(data_to_interpolate, data_to_match, 'bilinear')
@@ -806,7 +825,6 @@ def calculate_heatwave_statistics(output_path: str, tmaxfile: str, tminfile: str
         processes = []
         num_procs = 0
         for iyear, year in enumerate(range(first_year, daylast.year)):
-            print(f"{year} out of {daylast.year}")
             if year == daylast.year:
                 continue  # Incomplete yr
             proc = Process(target=calculate_stats_for_year, args=(tmp_out_path, uuid, iyear, year,))
@@ -1236,7 +1254,7 @@ def calculate_heatwave_statistics(output_path: str, tmaxfile: str, tminfile: str
 
 
     def save_yearly(HWN, HWF, HWD, CHWN, CHWF, CHWD, AHWN, AHWF, AHWD, AHW1N, AHW1F, AHW1D, AHW2F, AHW2D, definition, basedat, experiment, label):
-        yearlyout = Dataset(output_path + definition + ".nc", 'w')
+        yearlyout = Dataset(output_path + label + ".nc", 'w')
         yearlyout.createDimension('time', len(range(first_year,
                 daylast.year+1)))
         yearlyout.createDimension('lon', tmaxnc.dimensions[lonname].__len__())
@@ -1444,7 +1462,8 @@ def calculate_heatwave_statistics(output_path: str, tmaxfile: str, tminfile: str
     HWN_tn, HWF_tn, HWD_tn, CHWN_tn, CHWF_tn, CHWD_tn, AHWN_tn, AHWF_tn, AHWD_tn, AHW1N_tn, AHW1F_tn, AHW1D_tn, AHW2F_tn, AHW2D_tn = \
         split_hemispheres(tnexceed, int(bmax), int(elength), int(e2length), int(dmin), north, south, lats)
 
-    save_yearly(HWN_tx, HWF_tx, HWD_tx, CHWN_tx, CHWF_tx, CHWD_tx, AHWN_tx, AHWF_tx, AHWD_tx, AHW1N_tx, AHW1F_tx, AHW1D_tx, AHW2F_tx, AHW2D_tx, f"tx{str(pcntl*100)}", txpct, experiment, 'tx')
-    save_yearly(HWN_tn, HWF_tn, HWD_tn, CHWN_tn, CHWF_tn, CHWD_tn, AHWN_tn, AHWF_tn, AHWD_tn, AHW1N_tn, AHW1F_tn, AHW1D_tn, AHW2F_tn, AHW2D_tn, f"tx{str(pcntl*100)}", tnpct, experiment, 'tn')
+    perc_label = str(pcntl*100).replace(".0", "")
+    save_yearly(HWN_tx, HWF_tx, HWD_tx, CHWN_tx, CHWF_tx, CHWD_tx, AHWN_tx, AHWF_tx, AHWD_tx, AHW1N_tx, AHW1F_tx, AHW1D_tx, AHW2F_tx, AHW2D_tx, f"tx{perc_label}", txpct, experiment, 'tx')
+    save_yearly(HWN_tn, HWF_tn, HWD_tn, CHWN_tn, CHWF_tn, CHWD_tn, AHWN_tn, AHWF_tn, AHWD_tn, AHW1N_tn, AHW1F_tn, AHW1D_tn, AHW2F_tn, AHW2D_tn, f"tn{perc_label}", tnpct, experiment, 'tn')
     
     return True
