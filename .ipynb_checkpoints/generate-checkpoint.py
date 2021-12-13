@@ -1,20 +1,582 @@
 import analysis
 import paths
+import pop_weighted as pop
 import xarray
 import cProfile, pstats, io
-from pstats import SortKey
-from os.path import isfile
-from multiprocessing import Process
 import matplotlib.pyplot as plt
-from matplotlib import colors
-from matplotlib import rc
 import cartopy.crs as ccrs
 import regionmask
 import numpy as np
+from matplotlib import colors
+from matplotlib import rc
+from pstats import SortKey
+from os.path import isfile
+from multiprocessing import Process
 from analysis import bilinear_interpolation
 from regionmask.defined_regions import ar6
 from matplotlib.patches import Patch
 from matplotlib.backends.backend_pdf import PdfPages
+from paths import DIR_PATH, heat_out_trefht_tmax_members_1920_1950_CONTROL as tmax_paths, heat_out_trefht_tmin_members_1920_1950_CONTROL as tmin_paths
+
+
+def gen_isolated_signal_ratio(exp_num: str, variable_num: str, variable_den: str):
+    
+    all_member_paths = [path for path in tmax_paths()[0] if exp_num in path]
+    xghg_member_paths = [path for path in tmax_paths()[1] if exp_num in path]
+    xaer_member_paths = [path for path in tmax_paths()[2] if exp_num in path]
+
+    tx_all_dataset = xarray.open_mfdataset(all_member_paths, concat_dim="member", combine="nested")
+    tx_xaer_dataset = xarray.open_mfdataset(xaer_member_paths, concat_dim="member", combine="nested")
+    tx_xghg_dataset = xarray.open_mfdataset(xghg_member_paths, concat_dim="member", combine="nested")
+
+    tx_all_data = xarray.open_mfdataset(all_member_paths, concat_dim="member", combine="nested").mean(dim="member")[f"{variable_num}_tx90"].dt.days
+    tx_xaer_data = xarray.open_mfdataset(xaer_member_paths, concat_dim="member", combine="nested").mean(dim="member")[f"{variable_num}_tx90"].dt.days
+    tx_xghg_data = xarray.open_mfdataset(xghg_member_paths, concat_dim="member", combine="nested").mean(dim="member")[f"{variable_num}_tx90"].dt.days
+    land_mask = ar6.land.mask(tx_all_data)
+
+    tx_all_divided = xarray.open_mfdataset(all_member_paths, concat_dim="member", combine="nested")[f"{variable_num}_tx90"].dt.days
+    tx_xaer_divided = xarray.open_mfdataset(xaer_member_paths, concat_dim="member", combine="nested")[f"{variable_num}_tx90"].dt.days
+    tx_xghg_divided = xarray.open_mfdataset(xghg_member_paths, concat_dim="member", combine="nested")[f"{variable_num}_tx90"].dt.days
+    tx_all_den = xarray.open_mfdataset(all_member_paths, concat_dim="member", combine="nested")[f"{variable_den}_tx90"].dt.days
+    tx_xaer_den = xarray.open_mfdataset(xaer_member_paths, concat_dim="member", combine="nested")[f"{variable_den}_tx90"].dt.days
+    tx_xghg_den = xarray.open_mfdataset(xghg_member_paths, concat_dim="member", combine="nested")[f"{variable_den}_tx90"].dt.days
+    tx_all_divided /= tx_all_den.where(tx_all_den != 0)
+    tx_xaer_divided /= tx_xaer_den.where(tx_xaer_den != 0)
+    tx_xghg_divided /= tx_xghg_den.where(tx_xghg_den != 0)
+
+    tx_all_data_den = xarray.open_mfdataset(all_member_paths, concat_dim="member", combine="nested").mean(dim="member")[f"{variable_den}_tx90"].dt.days
+    tx_xaer_data_den = xarray.open_mfdataset(xaer_member_paths, concat_dim="member", combine="nested").mean(dim="member")[f"{variable_den}_tx90"].dt.days
+    tx_xghg_data_den = xarray.open_mfdataset(xghg_member_paths, concat_dim="member", combine="nested").mean(dim="member")[f"{variable_den}_tx90"].dt.days
+
+    tx_all_data /= tx_all_data_den.where(tx_all_data_den != 0)
+    tx_xaer_data /= tx_xaer_data_den.where(tx_xaer_data_den != 0)
+    tx_xghg_data /= tx_xghg_data_den.where(tx_xghg_data_den != 0)
+
+    tx_all_data = tx_all_data.where(land_mask > 0).mean(dim="lat").mean(dim="lon")
+    tx_xaer_data = tx_xaer_data.where(land_mask > 0).mean(dim="lat").mean(dim="lon")
+    tx_xghg_data = tx_xghg_data.where(land_mask > 0).mean(dim="lat").mean(dim="lon")
+
+    all_member_paths = [path for path in tmin_paths()[0] if exp_num in path]
+    xghg_member_paths = [path for path in tmin_paths()[1] if exp_num in path]
+    xaer_member_paths = [path for path in tmin_paths()[2] if exp_num in path]
+
+    tn_all_dataset = xarray.open_mfdataset(all_member_paths, concat_dim="member", combine="nested")
+    tn_xaer_dataset = xarray.open_mfdataset(xaer_member_paths, concat_dim="member", combine="nested")
+    tn_xghg_dataset = xarray.open_mfdataset(xghg_member_paths, concat_dim="member", combine="nested")
+
+    tn_all_data = tn_all_dataset.mean(dim="member")[f"{variable_num}_tn90"].dt.days
+    tn_xaer_data = tn_xaer_dataset.mean(dim="member")[f"{variable_num}_tn90"].dt.days
+    tn_xghg_data = tn_xghg_dataset.mean(dim="member")[f"{variable_num}_tn90"].dt.days
+
+    tn_all_divided = xarray.open_mfdataset(all_member_paths, concat_dim="member", combine="nested")[f"{variable_num}_tn90"].dt.days
+    tn_xaer_divided = xarray.open_mfdataset(xaer_member_paths, concat_dim="member", combine="nested")[f"{variable_num}_tn90"].dt.days
+    tn_xghg_divided = xarray.open_mfdataset(xghg_member_paths, concat_dim="member", combine="nested")[f"{variable_num}_tn90"].dt.days
+    tn_all_den = xarray.open_mfdataset(all_member_paths, concat_dim="member", combine="nested")[f"{variable_den}_tn90"].dt.days
+    tn_xaer_den = xarray.open_mfdataset(xaer_member_paths, concat_dim="member", combine="nested")[f"{variable_den}_tn90"].dt.days
+    tn_xghg_den = xarray.open_mfdataset(xghg_member_paths, concat_dim="member", combine="nested")[f"{variable_den}_tn90"].dt.days
+    tn_all_divided /= tn_all_den.where(tn_all_den != 0)
+    tn_xaer_divided /= tn_xaer_den.where(tn_xaer_den != 0)
+    tn_xghg_divided /= tn_xghg_den.where(tn_xghg_den != 0)
+
+    tn_all_data_den = xarray.open_mfdataset(all_member_paths, concat_dim="member", combine="nested").mean(dim="member")[f"{variable_den}_tn90"].dt.days
+    tn_xaer_data_den = xarray.open_mfdataset(xaer_member_paths, concat_dim="member", combine="nested").mean(dim="member")[f"{variable_den}_tn90"].dt.days
+    tn_xghg_data_den = xarray.open_mfdataset(xghg_member_paths, concat_dim="member", combine="nested").mean(dim="member")[f"{variable_den}_tn90"].dt.days
+
+    tn_all_data /= tn_all_data_den.where(tx_all_data_den != 0)
+    tn_xaer_data /= tn_xaer_data_den.where(tx_xaer_data_den != 0)
+    tn_xghg_data /= tn_xghg_data_den.where(tx_xghg_data_den != 0)
+
+    tn_all_data = tn_all_data.where(land_mask > 0).mean(dim="lat").mean(dim="lon")
+    tn_xaer_data = tn_xaer_data.where(land_mask > 0).mean(dim="lat").mean(dim="lon")
+    tn_xghg_data = tn_xghg_data.where(land_mask > 0).mean(dim="lat").mean(dim="lon")
+
+    f, (ax1, ax2) = plt.subplots(2, 1, figsize=(18, 15), facecolor='w')
+    f.suptitle(f"{variable_num}/{variable_den} {exp_num} Isolated Signal Comparison (Land Masked)", fontsize=30)
+    rc('font', **{'weight': 'bold', 'size': 22})
+
+    tn_xghg_data.plot(ax=ax1, label="XGHG", color="red", linewidth=4)
+    ax1.fill_between(tn_xghg_data.time, tn_xghg_divided.where(land_mask > 0).mean(dim="lat").mean(dim="lon").min(dim="member"), 
+                     tn_xghg_divided.where(land_mask > 0).mean(dim="lat").mean(dim="lon").max(dim="member"),
+                    color="red", alpha=0.35)
+    tn_xaer_data.plot(ax=ax1, label="XAER", color="blue", linewidth=4)
+    ax1.fill_between(tn_xaer_data.time, tn_xaer_divided.where(land_mask > 0).mean(dim="lat").mean(dim="lon").min(dim="member"), 
+                     tn_xaer_divided.where(land_mask > 0).mean(dim="lat").mean(dim="lon").max(dim="member"),
+                    color="blue", alpha=0.35)
+    tn_all_data.plot(ax=ax1, label="ALL", color="green", linewidth=4)
+    ax1.fill_between(tn_all_data.time, tn_all_divided.where(land_mask > 0).mean(dim="lat").mean(dim="lon").min(dim="member"), 
+                     tn_all_divided.where(land_mask > 0).mean(dim="lat").mean(dim="lon").max(dim="member"),
+                    color="green", alpha=0.35)
+    ax1.grid()
+    ax1.legend()
+    ax1.set_title("Using Min. Temperature")
+
+    tx_xghg_data.plot(ax=ax2, label="XGHG", color="red", linewidth=4)
+    ax2.fill_between(tx_xghg_data.time, tx_xghg_divided.where(land_mask > 0).mean(dim="lat").mean(dim="lon").min(dim="member"), 
+                     tx_xghg_divided.where(land_mask > 0).mean(dim="lat").mean(dim="lon").max(dim="member"),
+                    color="red", alpha=0.35)
+
+    tx_xaer_data.plot(ax=ax2, label="XAER", color="blue", linewidth=4)
+    ax2.fill_between(tx_xaer_data.time, tx_xaer_divided.where(land_mask > 0).mean(dim="lat").mean(dim="lon").min(dim="member"), 
+                     tx_xaer_divided.where(land_mask > 0).mean(dim="lat").mean(dim="lon").max(dim="member"),
+                     color="blue", alpha=0.35)
+    tx_all_data.plot(ax=ax2, label="ALL", color="green", linewidth=4)
+    ax2.fill_between(tx_all_data.time, tx_all_divided.where(land_mask > 0).mean(dim="lat").mean(dim="lon").min(dim="member"), 
+                     tx_all_divided.where(land_mask > 0).mean(dim="lat").mean(dim="lon").max(dim="member"),
+                    color="green", alpha=0.35)
+    ax2.grid()
+    ax2.legend()
+    ax2.set_title("Using Max. Temperature")
+
+    f.tight_layout()
+    return f
+
+
+def gen_isolated_signal_ghg_aer_all(variable: str, exp_num: str):
+    all_member_paths = [path for path in tmax_paths()[0] if exp_num in path]
+    xghg_member_paths = [path for path in tmax_paths()[1] if exp_num in path]
+    xaer_member_paths = [path for path in tmax_paths()[2] if exp_num in path]
+
+    tx_all_dataset = xarray.open_mfdataset(all_member_paths, concat_dim="member", combine="nested")
+    tx_xaer_dataset = xarray.open_mfdataset(xaer_member_paths, concat_dim="member", combine="nested")
+    tx_xghg_dataset = xarray.open_mfdataset(xghg_member_paths, concat_dim="member", combine="nested")
+
+    tx_all_data = xarray.open_mfdataset(all_member_paths, concat_dim="member", combine="nested").mean(dim="member")[f"{variable}_tx90"].dt.days
+    tx_xaer_data = xarray.open_mfdataset(xaer_member_paths, concat_dim="member", combine="nested").mean(dim="member")[f"{variable}_tx90"].dt.days
+    tx_xghg_data = xarray.open_mfdataset(xghg_member_paths, concat_dim="member", combine="nested").mean(dim="member")[f"{variable}_tx90"].dt.days
+    land_mask = ar6.land.mask(tx_all_data)
+
+    tx_all_data = tx_all_data.where(land_mask > 0).mean(dim="lat").mean(dim="lon")
+    tx_xaer_data = tx_xaer_data.where(land_mask > 0).mean(dim="lat").mean(dim="lon")
+    tx_xghg_data = tx_xghg_data.where(land_mask > 0).mean(dim="lat").mean(dim="lon")
+
+    all_member_paths = [path for path in tmin_paths()[0] if exp_num in path]
+    xghg_member_paths = [path for path in tmin_paths()[1] if exp_num in path]
+    xaer_member_paths = [path for path in tmin_paths()[2] if exp_num in path]
+
+    tn_all_dataset = xarray.open_mfdataset(all_member_paths, concat_dim="member", combine="nested")
+    tn_xaer_dataset = xarray.open_mfdataset(xaer_member_paths, concat_dim="member", combine="nested")
+    tn_xghg_dataset = xarray.open_mfdataset(xghg_member_paths, concat_dim="member", combine="nested")
+
+    tn_all_data = tn_all_dataset.mean(dim="member")[f"{variable}_tn90"].dt.days
+    tn_xaer_data = tn_xaer_dataset.mean(dim="member")[f"{variable}_tn90"].dt.days
+    tn_xghg_data = tn_xghg_dataset.mean(dim="member")[f"{variable}_tn90"].dt.days
+
+    tn_all_data = tn_all_data.where(land_mask > 0).mean(dim="lat").mean(dim="lon")
+    tn_xaer_data = tn_xaer_data.where(land_mask > 0).mean(dim="lat").mean(dim="lon")
+    tn_xghg_data = tn_xghg_data.where(land_mask > 0).mean(dim="lat").mean(dim="lon")
+
+    f, (ax1, ax2) = plt.subplots(2, 1, figsize=(18, 15), facecolor='w')
+    f.suptitle(f"{variable} {exp_num} Isolated Signal Comparison (Land Masked)", fontsize=30)
+    rc('font', **{'weight': 'bold', 'size': 22})
+
+
+    (tn_all_data - tn_xghg_data).plot(ax=ax1, label="GHG", color="red", linewidth=4)
+    ax1.fill_between(tn_xghg_data.time, (tn_all_dataset - tn_xghg_dataset)[f"{variable}_tn90"].where(land_mask > 0).mean(dim="lat").mean(dim="lon").min(dim="member").dt.days, 
+                     (tn_all_dataset - tn_xghg_dataset)[f"{variable}_tn90"].where(land_mask > 0).mean(dim="lat").mean(dim="lon").max(dim="member").dt.days,
+                    color="red", alpha=0.35)
+    (tn_all_data - tn_xaer_data).plot(ax=ax1, label="AER", color="blue", linewidth=4)
+    ax1.fill_between(tn_xaer_data.time, (tn_all_dataset - tn_xaer_dataset)[f"{variable}_tn90"].where(land_mask > 0).mean(dim="lat").mean(dim="lon").min(dim="member").dt.days, 
+                     (tn_all_dataset - tn_xaer_dataset)[f"{variable}_tn90"].where(land_mask > 0).mean(dim="lat").mean(dim="lon").max(dim="member").dt.days,
+                    color="blue", alpha=0.35)
+    tn_all_data.plot(ax=ax1, label="ALL", color="green", linewidth=4)
+    ax1.fill_between(tn_all_data.time, tn_all_dataset[f"{variable}_tn90"].where(land_mask > 0).mean(dim="lat").mean(dim="lon").min(dim="member").dt.days, 
+                     tn_all_dataset[f"{variable}_tn90"].where(land_mask > 0).mean(dim="lat").mean(dim="lon").max(dim="member").dt.days,
+                    color="green", alpha=0.35)
+    ax1.grid()
+    ax1.legend()
+    ax1.set_title("Using Min. Temperature")
+
+    (tx_all_data - tx_xghg_data).plot(ax=ax2, label="GHG", color="red", linewidth=4)
+    ax2.fill_between(tx_xghg_data.time, (tx_all_dataset - tx_xghg_dataset)[f"{variable}_tx90"].where(land_mask > 0).mean(dim="lat").mean(dim="lon").min(dim="member").dt.days, 
+                     (tx_all_dataset - tx_xghg_dataset)[f"{variable}_tx90"].where(land_mask > 0).mean(dim="lat").mean(dim="lon").max(dim="member").dt.days,
+                    color="red", alpha=0.35)
+
+    (tx_all_data - tx_xaer_data).plot(ax=ax2, label="AER", color="blue", linewidth=4)
+    ax2.fill_between(tx_xaer_data.time, (tx_all_dataset - tx_xaer_dataset)[f"{variable}_tx90"].where(land_mask > 0).mean(dim="lat").mean(dim="lon").min(dim="member").dt.days, 
+                     (tx_all_dataset - tx_xaer_dataset)[f"{variable}_tx90"].where(land_mask > 0).mean(dim="lat").mean(dim="lon").max(dim="member").dt.days,
+                     color="blue", alpha=0.35)
+    tx_all_data.plot(ax=ax2, label="ALL", color="green", linewidth=4)
+    ax2.fill_between(tx_all_data.time, tx_all_dataset[f"{variable}_tx90"].where(land_mask > 0).mean(dim="lat").mean(dim="lon").min(dim="member").dt.days, 
+                     tx_all_dataset[f"{variable}_tx90"].where(land_mask > 0).mean(dim="lat").mean(dim="lon").max(dim="member").dt.days,
+                    color="green", alpha=0.35)
+
+    ax2.grid()
+    ax2.legend()
+    ax2.set_title("Using Max. Temperature")
+
+    f.tight_layout()
+    return f
+
+
+def gen_isolated_signal_ghg(variable: str, exp_num: str):
+    all_member_paths = [path for path in tmax_paths()[0] if exp_num in path]
+    xghg_member_paths = [path for path in tmax_paths()[1] if exp_num in path]
+
+    tx_all_dataset = xarray.open_mfdataset(all_member_paths, concat_dim="member", combine="nested")
+    tx_xghg_dataset = xarray.open_mfdataset(xghg_member_paths, concat_dim="member", combine="nested")
+
+    tx_all_data = xarray.open_mfdataset(all_member_paths, concat_dim="member", combine="nested").mean(dim="member")[f"{variable}_tx90"].dt.days
+    tx_xghg_data = xarray.open_mfdataset(xghg_member_paths, concat_dim="member", combine="nested").mean(dim="member")[f"{variable}_tx90"].dt.days
+    land_mask = ar6.land.mask(tx_all_data)
+
+    tx_all_data = tx_all_data.where(land_mask > 0).mean(dim="lat").mean(dim="lon")
+    tx_xghg_data = tx_xghg_data.where(land_mask > 0).mean(dim="lat").mean(dim="lon")
+
+    all_member_paths = [path for path in tmin_paths()[0] if exp_num in path]
+    xghg_member_paths = [path for path in tmin_paths()[1] if exp_num in path]
+
+    tn_all_dataset = xarray.open_mfdataset(all_member_paths, concat_dim="member", combine="nested")
+    tn_xghg_dataset = xarray.open_mfdataset(xghg_member_paths, concat_dim="member", combine="nested")
+
+    tn_all_data = tn_all_dataset.mean(dim="member")[f"{variable}_tn90"].dt.days
+    tn_xghg_data = tn_xghg_dataset.mean(dim="member")[f"{variable}_tn90"].dt.days
+
+    tn_all_data = tn_all_data.where(land_mask > 0).mean(dim="lat").mean(dim="lon")
+    tn_xghg_data = tn_xghg_data.where(land_mask > 0).mean(dim="lat").mean(dim="lon")
+
+    f, (ax1, ax2) = plt.subplots(2, 1, figsize=(18, 15), facecolor='w')
+    f.suptitle(f"{variable} {exp_num} Isolated Signal Comparison (Land Masked)", fontsize=30)
+    rc('font', **{'weight': 'bold', 'size': 22})
+
+    (tn_all_data - tn_xghg_data).plot(ax=ax1, label="GHG", color="red", linewidth=4)
+    ax1.fill_between(tn_xghg_data.time, (tn_all_dataset - tn_xghg_dataset)[f"{variable}_tn90"].where(land_mask > 0).mean(dim="lat").mean(dim="lon").min(dim="member").dt.days, 
+                     (tn_all_dataset - tn_xghg_dataset)[f"{variable}_tn90"].where(land_mask > 0).mean(dim="lat").mean(dim="lon").max(dim="member").dt.days,
+                    color="red", alpha=0.35)
+    ax1.grid()
+    ax1.legend()
+    ax1.set_title("Using Min. Temperature")
+
+    (tx_all_data - tx_xghg_data).plot(ax=ax2, label="GHG", color="red", linewidth=4)
+    ax2.fill_between(tx_xghg_data.time, (tx_all_dataset - tx_xghg_dataset)[f"{variable}_tx90"].where(land_mask > 0).mean(dim="lat").mean(dim="lon").min(dim="member").dt.days, 
+                     (tx_all_dataset - tx_xghg_dataset)[f"{variable}_tx90"].where(land_mask > 0).mean(dim="lat").mean(dim="lon").max(dim="member").dt.days,
+                    color="red", alpha=0.35)
+    ax2.grid()
+    ax2.legend()
+    ax2.set_title("Using Max. Temperature")
+
+    f.tight_layout()
+    return f
+    
+def gen_isolated_signal_aer(variable: str, exp_num: str):
+    all_member_paths = [path for path in tmax_paths()[0] if exp_num in path]
+    xaer_member_paths = [path for path in tmax_paths()[2] if exp_num in path]
+
+    tx_all_dataset = xarray.open_mfdataset(all_member_paths, concat_dim="member", combine="nested")
+    tx_xaer_dataset = xarray.open_mfdataset(xaer_member_paths, concat_dim="member", combine="nested")
+    
+    tx_all_data = xarray.open_mfdataset(all_member_paths, concat_dim="member", combine="nested").mean(dim="member")[f"{variable}_tx90"].dt.days
+    tx_xaer_data = xarray.open_mfdataset(xaer_member_paths, concat_dim="member", combine="nested").mean(dim="member")[f"{variable}_tx90"].dt.days
+    land_mask = ar6.land.mask(tx_all_data)
+
+    tx_all_data = tx_all_data.where(land_mask > 0).mean(dim="lat").mean(dim="lon")
+    tx_xaer_data = tx_xaer_data.where(land_mask > 0).mean(dim="lat").mean(dim="lon")
+
+    all_member_paths = [path for path in tmin_paths()[0] if exp_num in path]
+    xaer_member_paths = [path for path in tmin_paths()[2] if exp_num in path]
+
+    tn_all_dataset = xarray.open_mfdataset(all_member_paths, concat_dim="member", combine="nested")
+    tn_xaer_dataset = xarray.open_mfdataset(xaer_member_paths, concat_dim="member", combine="nested")
+    
+    tn_all_data = tn_all_dataset.mean(dim="member")[f"{variable}_tn90"].dt.days
+    tn_xaer_data = tn_xaer_dataset.mean(dim="member")[f"{variable}_tn90"].dt.days
+
+    tn_all_data = tn_all_data.where(land_mask > 0).mean(dim="lat").mean(dim="lon")
+    tn_xaer_data = tn_xaer_data.where(land_mask > 0).mean(dim="lat").mean(dim="lon")
+    
+    f, (ax1, ax2) = plt.subplots(2, 1, figsize=(18, 15), facecolor='w')
+    f.suptitle(f"{variable} {exp_num} Isolated Signal Comparison (Land Masked)", fontsize=30)
+    rc('font', **{'weight': 'bold', 'size': 22})
+
+    (tn_all_data - tn_xaer_data).plot(ax=ax1, label="AER", color="blue", linewidth=4)
+    ax1.fill_between(tn_xaer_data.time, (tn_all_dataset - tn_xaer_dataset)[f"{variable}_tn90"].where(land_mask > 0).mean(dim="lat").mean(dim="lon").min(dim="member").dt.days, 
+                     (tn_all_dataset - tn_xaer_dataset)[f"{variable}_tn90"].where(land_mask > 0).mean(dim="lat").mean(dim="lon").max(dim="member").dt.days,
+                    color="blue", alpha=0.35)
+    ax1.grid()
+    ax1.legend()
+    ax1.set_title("Using Min. Temperature")
+
+    (tx_all_data - tx_xaer_data).plot(ax=ax2, label="AER", color="blue", linewidth=4)
+    ax2.fill_between(tx_xaer_data.time, (tx_all_dataset - tx_xaer_dataset)[f"{variable}_tx90"].where(land_mask > 0).mean(dim="lat").mean(dim="lon").min(dim="member").dt.days, 
+                     (tx_all_dataset - tx_xaer_dataset)[f"{variable}_tx90"].where(land_mask > 0).mean(dim="lat").mean(dim="lon").max(dim="member").dt.days,
+                    color="blue", alpha=0.35)
+    ax2.grid()
+    ax2.legend()
+    ax2.set_title("Using Max. Temperature")
+
+    f.tight_layout()
+    return f
+
+
+def gen_isolated_signal_comparison(variable: str, exp_num: str):
+    all_member_paths = [path for path in tmax_paths()[0] if exp_num in path]
+    xghg_member_paths = [path for path in tmax_paths()[1] if exp_num in path]
+    xaer_member_paths = [path for path in tmax_paths()[2] if exp_num in path]
+
+    tx_all_dataset = xarray.open_mfdataset(all_member_paths, concat_dim="member", combine="nested")
+    tx_xaer_dataset = xarray.open_mfdataset(xaer_member_paths, concat_dim="member", combine="nested")
+    tx_xghg_dataset = xarray.open_mfdataset(xghg_member_paths, concat_dim="member", combine="nested")
+
+    tx_all_data = xarray.open_mfdataset(all_member_paths, concat_dim="member", combine="nested").mean(dim="member")[f"{variable}_tx90"].dt.days
+    tx_xaer_data = xarray.open_mfdataset(xaer_member_paths, concat_dim="member", combine="nested").mean(dim="member")[f"{variable}_tx90"].dt.days
+    tx_xghg_data = xarray.open_mfdataset(xghg_member_paths, concat_dim="member", combine="nested").mean(dim="member")[f"{variable}_tx90"].dt.days
+    land_mask = ar6.land.mask(tx_all_data)
+
+    tx_all_data = tx_all_data.where(land_mask > 0).mean(dim="lat").mean(dim="lon")
+    tx_xaer_data = tx_xaer_data.where(land_mask > 0).mean(dim="lat").mean(dim="lon")
+    tx_xghg_data = tx_xghg_data.where(land_mask > 0).mean(dim="lat").mean(dim="lon")
+
+    all_member_paths = [path for path in tmin_paths()[0] if exp_num in path]
+    xghg_member_paths = [path for path in tmin_paths()[1] if exp_num in path]
+    xaer_member_paths = [path for path in tmin_paths()[2] if exp_num in path]
+
+    tn_all_dataset = xarray.open_mfdataset(all_member_paths, concat_dim="member", combine="nested")
+    tn_xaer_dataset = xarray.open_mfdataset(xaer_member_paths, concat_dim="member", combine="nested")
+    tn_xghg_dataset = xarray.open_mfdataset(xghg_member_paths, concat_dim="member", combine="nested")
+
+    tn_all_data = tn_all_dataset.mean(dim="member")[f"{variable}_tn90"].dt.days
+    tn_xaer_data = tn_xaer_dataset.mean(dim="member")[f"{variable}_tn90"].dt.days
+    tn_xghg_data = tn_xghg_dataset.mean(dim="member")[f"{variable}_tn90"].dt.days
+
+    tn_all_data = tn_all_data.where(land_mask > 0).mean(dim="lat").mean(dim="lon")
+    tn_xaer_data = tn_xaer_data.where(land_mask > 0).mean(dim="lat").mean(dim="lon")
+    tn_xghg_data = tn_xghg_data.where(land_mask > 0).mean(dim="lat").mean(dim="lon")
+
+    f, (ax1, ax2) = plt.subplots(2, 1, figsize=(18, 15), facecolor='w')
+    f.suptitle(f"{variable} {exp_num} Isolated Signal Comparison (Land Masked)", fontsize=30)
+    rc('font', **{'weight': 'bold', 'size': 22})
+
+    tn_all_data.plot(ax=ax1, label="ALL", color="green", linewidth=4)
+    ax1.fill_between(tn_all_data.time, tn_all_dataset[f"{variable}_tn90"].where(land_mask > 0).mean(dim="lat").mean(dim="lon").min(dim="member").dt.days, 
+                     tn_all_dataset[f"{variable}_tn90"].where(land_mask > 0).mean(dim="lat").mean(dim="lon").max(dim="member").dt.days,
+                    color="green", alpha=0.35)
+    tn_xaer_data.plot(ax=ax1, label="XAER", color="blue", linewidth=4)
+    ax1.fill_between(tn_xaer_data.time, tn_xaer_dataset[f"{variable}_tn90"].where(land_mask > 0).mean(dim="lat").mean(dim="lon").min(dim="member").dt.days, 
+                     tn_xaer_dataset[f"{variable}_tn90"].where(land_mask > 0).mean(dim="lat").mean(dim="lon").max(dim="member").dt.days,
+                    color="blue", alpha=0.35)
+    tn_xghg_data.plot(ax=ax1, label="XGHG", color="red", linewidth=4)
+    ax1.fill_between(tn_xghg_data.time, tn_xghg_dataset[f"{variable}_tn90"].where(land_mask > 0).mean(dim="lat").mean(dim="lon").min(dim="member").dt.days, 
+                     tn_xghg_dataset[f"{variable}_tn90"].where(land_mask > 0).mean(dim="lat").mean(dim="lon").max(dim="member").dt.days,
+                    color="red", alpha=0.35)
+
+    ax1.grid()
+    ax1.legend()
+    ax1.set_title("Using Min. Temperature")
+
+    tx_all_data.plot(ax=ax2, label="ALL", color="green", linewidth=4)
+    ax2.fill_between(tx_all_data.time, tx_all_dataset[f"{variable}_tx90"].where(land_mask > 0).mean(dim="lat").mean(dim="lon").min(dim="member").dt.days, 
+                     tx_all_dataset[f"{variable}_tx90"].where(land_mask > 0).mean(dim="lat").mean(dim="lon").max(dim="member").dt.days,
+                    color="green", alpha=0.35)
+    tx_xaer_data.plot(ax=ax2, label="XAER", color="blue", linewidth=4)
+    ax2.fill_between(tx_xaer_data.time, tx_xaer_dataset[f"{variable}_tx90"].where(land_mask > 0).mean(dim="lat").mean(dim="lon").min(dim="member").dt.days, 
+                     tx_xaer_dataset[f"{variable}_tx90"].where(land_mask > 0).mean(dim="lat").mean(dim="lon").max(dim="member").dt.days,
+                    color="blue", alpha=0.35)
+    tx_xghg_data.plot(ax=ax2, label="XGHG", color="red", linewidth=4)
+    ax2.fill_between(tx_xghg_data.time, tx_xghg_dataset[f"{variable}_tx90"].where(land_mask > 0).mean(dim="lat").mean(dim="lon").min(dim="member").dt.days, 
+                     tx_xghg_dataset[f"{variable}_tx90"].where(land_mask > 0).mean(dim="lat").mean(dim="lon").max(dim="member").dt.days,
+                    color="red", alpha=0.35)
+
+    ax2.grid()
+    ax2.legend()
+    ax2.set_title("Using Max. Temperature")
+
+    f.tight_layout()
+    return f
+
+def gen_pop_isolated_signal_comparison(variable: str, exp_num: str, min_max: str):
+    land_mask = ar6.land.mask(xarray.open_dataset(f"{paths.DIR_PATH}/populations/weighted/ALL/{variable}-{exp_num}-{min_max}.nc"))
+
+    weighted_all = xarray.open_dataset(f"{paths.DIR_PATH}/populations/weighted/ALL/{variable}-{exp_num}-{min_max}.nc").days.where(land_mask > 0).mean(dim="lat").mean(dim="lon")
+    weighted_xaer = xarray.open_dataset(f"{paths.DIR_PATH}/populations/weighted/XAER/{variable}-{exp_num}-{min_max}.nc").days.where(land_mask > 0).mean(dim="lat").mean(dim="lon")
+    weighted_xghg = xarray.open_dataset(f"{paths.DIR_PATH}/populations/weighted/XGHG/{variable}-{exp_num}-{min_max}.nc").days.where(land_mask > 0).mean(dim="lat").mean(dim="lon")
+    weighted_aer = ((weighted_all - weighted_xaer) / weighted_xaer)*100
+    weighted_ghg = ((weighted_all - weighted_xghg) / weighted_xghg)*100
+
+    if min_max == "tx":
+        all_member_paths = [path for path in tmax_paths()[0] if exp_num in path]
+        xghg_member_paths = [path for path in tmax_paths()[1] if exp_num in path]
+        xaer_member_paths = [path for path in tmax_paths()[2] if exp_num in path]
+    elif min_max == "tn":
+        all_member_paths = [path for path in tmin_paths()[0] if exp_num in path]
+        xghg_member_paths = [path for path in tmin_paths()[1] if exp_num in path]
+        xaer_member_paths = [path for path in tmin_paths()[2] if exp_num in path]
+    all_data = xarray.open_mfdataset(all_member_paths, concat_dim="member", combine="nested")[f"{variable}_{min_max}90"].dt.days.mean(dim="member")
+    xaer_data = xarray.open_mfdataset(xaer_member_paths, concat_dim="member", combine="nested")[f"{variable}_{min_max}90"].dt.days.mean(dim="member")
+    xghg_data = xarray.open_mfdataset(xghg_member_paths, concat_dim="member", combine="nested")[f"{variable}_{min_max}90"].dt.days.mean(dim="member")
+
+    # Shift data
+    unweighted_all = all_data.assign_coords(lon=(((all_data.lon + 180) % 360) - 180)).sortby('lon')
+    unweighted_xaer = xaer_data.assign_coords(lon=(((xaer_data.lon + 180) % 360) - 180)).sortby('lon')
+    unweighted_xghg = xghg_data.assign_coords(lon=(((xghg_data.lon + 180) % 360) - 180)).sortby('lon')
+    
+    unweighted_all = unweighted_all.where(land_mask > 0).days.mean(dim="lat").mean(dim="lon")
+    unweighted_xaer = unweighted_xaer.where(land_mask > 0).days.mean(dim="lat").mean(dim="lon")
+    unweighted_xghg = unweighted_xghg.where(land_mask > 0).days.mean(dim="lat").mean(dim="lon")
+    unweighted_aer = ((unweighted_all - unweighted_xaer) / unweighted_xaer)*100
+    unweighted_ghg = ((unweighted_all - unweighted_xghg) / unweighted_xghg)*100
+
+    f, (ax1, ax2) = plt.subplots(2, 1, figsize=(35, 20), facecolor='w')
+    f.suptitle(f"{variable} {exp_num} {min_max} Population Unweighted vs Weighted (Signal Divided by XSignal) (Land Masked)", fontsize=30)
+    rc('font', **{'weight': 'bold', 'size': 22})
+
+    unweighted_aer.rename("Perc. Change (%)").plot(ax=ax1, color="blue", label="Unweighted AER")
+    weighted_aer.rename("Perc. Change (%)").plot(ax=ax1, color="red", label="Weighted AER")
+    ax1.grid()
+    ax1.legend()
+    ax1.set_title("AER Signal")
+
+    unweighted_ghg.rename("Perc. Change (%)").plot(ax=ax2, color="blue", label="Unweighted GHG")
+    weighted_ghg.rename("Perc. Change (%)").plot(ax=ax2, color="red", label="Weighted GHG")
+    ax2.grid()
+    ax2.legend()
+    ax2.set_title("GHG Signal")
+
+    f.tight_layout()
+    return f
+
+
+def gen_pop_region_bar_charts(variable: str, exp_num: str, min_max: str, begin_time: int, end_time: int):
+    land_mask = ar6.land.mask(xarray.open_dataset(f"{paths.DIR_PATH}/populations/weighted/ALL/{variable}-{exp_num}-{min_max}.nc"))
+
+    weighted_all = xarray.open_dataset(f"{paths.DIR_PATH}/populations/weighted/ALL/{variable}-{exp_num}-{min_max}.nc").days.where(land_mask > 0).mean(dim="lat").mean(dim="lon")
+    weighted_xaer = xarray.open_dataset(f"{paths.DIR_PATH}/populations/weighted/XAER/{variable}-{exp_num}-{min_max}.nc").days.where(land_mask > 0).mean(dim="lat").mean(dim="lon")
+    weighted_xghg = xarray.open_dataset(f"{paths.DIR_PATH}/populations/weighted/XGHG/{variable}-{exp_num}-{min_max}.nc").days.where(land_mask > 0).mean(dim="lat").mean(dim="lon")
+    weighted_aer = weighted_all - weighted_xaer
+    weighted_aer = weighted_aer / weighted_xaer
+
+    region_mask_aer = ar6.land.mask(weighted_aer)
+    region_aer_values = weighted_aer.groupby(region_mask_aer).mean()
+
+    for sel_region in region_aer_values.region:
+        value = region_aer_values.sel(region=sel_region).days
+        region_mask_aer = region_mask_aer.where(region_mask_aer != sel_region, other=value)
+    region_mask_aer *= 100
+
+
+    weighted_ghg = weighted_all - weighted_xghg
+    weighted_ghg = weighted_ghg / weighted_xghg
+
+    region_mask_ghg = ar6.land.mask(weighted_ghg)
+    region_ghg_values = weighted_ghg.groupby(region_mask_ghg).mean()
+
+    for sel_region in region_ghg_values.region:
+        value = region_ghg_values.sel(region=sel_region).days
+        region_mask_ghg = region_mask_ghg.where(region_mask_ghg != sel_region, other=value)
+    region_mask_ghg *= 100
+
+
+    if min_max == "tx":
+        all_member_paths = [path for path in tmax_paths()[0] if exp_num in path]
+        xghg_member_paths = [path for path in tmax_paths()[1] if exp_num in path]
+        xaer_member_paths = [path for path in tmax_paths()[2] if exp_num in path]
+    elif min_max == "tn":
+        all_member_paths = [path for path in tmin_paths()[0] if exp_num in path]
+        xghg_member_paths = [path for path in tmin_paths()[1] if exp_num in path]
+        xaer_member_paths = [path for path in tmin_paths()[2] if exp_num in path]
+    all_data = xarray.open_mfdataset(all_member_paths, concat_dim="member", combine="nested")[f"{variable}_{min_max}90"].dt.days.mean(dim="member")
+    xaer_data = xarray.open_mfdataset(xaer_member_paths, concat_dim="member", combine="nested")[f"{variable}_{min_max}90"].dt.days.mean(dim="member")
+    xghg_data = xarray.open_mfdataset(xghg_member_paths, concat_dim="member", combine="nested")[f"{variable}_{min_max}90"].dt.days.mean(dim="member")
+
+    # Shift data
+    unweighted_all = all_data.assign_coords(lon=(((all_data.lon + 180) % 360) - 180)).sortby('lon')
+    unweighted_xaer = xaer_data.assign_coords(lon=(((xaer_data.lon + 180) % 360) - 180)).sortby('lon')
+    unweighted_xghg = xghg_data.assign_coords(lon=(((xghg_data.lon + 180) % 360) - 180)).sortby('lon')
+
+    unweighted_all = unweighted_all.where(land_mask > 0).sel(time=slice(begin_time,end_time)).mean(dim="time")
+    unweighted_xaer = unweighted_xaer.where(land_mask > 0).sel(time=slice(begin_time,end_time)).mean(dim="time")
+    unweighted_xghg = unweighted_xghg.where(land_mask > 0).sel(time=slice(begin_time,end_time)).mean(dim="time")
+
+    unweighted_aer = unweighted_all - unweighted_xaer
+    unweighted_aer = unweighted_aer / unweighted_xaer
+
+    uregion_mask_aer = ar6.land.mask(unweighted_aer)
+    uregion_aer_values = unweighted_aer.groupby(uregion_mask_aer).mean()
+
+    for sel_region in uregion_aer_values.region:
+        value = uregion_aer_values.sel(region=sel_region).days
+        uregion_mask_aer = uregion_mask_aer.where(uregion_mask_aer != sel_region, other=value)
+    uregion_mask_aer *= 100
+
+
+    unweighted_ghg = unweighted_all - unweighted_xghg
+    unweighted_ghg = unweighted_ghg / unweighted_xghg
+
+    uregion_mask_ghg = ar6.land.mask(unweighted_ghg)
+    uregion_ghg_values = unweighted_ghg.groupby(uregion_mask_ghg).mean()
+
+    for sel_region in uregion_ghg_values.region:
+        value = uregion_ghg_values.sel(region=sel_region).days
+        uregion_mask_ghg = uregion_mask_ghg.where(uregion_mask_ghg != sel_region, other=value)
+    uregion_mask_ghg *= 100
+
+    f, (ax1, ax2) = plt.subplots(2, 1, figsize=(60, 90), facecolor='w')
+    f.suptitle(f"HWF Population Unweighted vs Weighted Averaged Over {begin_time} to {end_time} (Land Masked)", fontsize=75)
+    rc('font', **{'family': 'normal', 'weight': 'bold', 'size': 50})
+
+    labels = [ar6.land.regions[index].name for index in ar6.land.regions]
+
+    ax1.barh(labels, uregion_aer_values.days.values, 0.9, label='Unweighted')
+    ax1.barh(labels, region_aer_values.days.values, 0.6, label='Weighted')
+    ax1.legend()
+    ax1.set_ylabel('Regions')
+    ax1.set_xlabel('Perc Change(%)')
+    ax1.grid()
+    ax1.set_title("AER Signal")
+
+    ax2.barh(labels, uregion_ghg_values.days.values, 0.9, label='Unweighted')
+    ax2.barh(labels, region_ghg_values.days.values, 0.6, label='Weighted')
+    ax2.legend()
+    ax2.set_ylabel('Regions')
+    ax2.set_xlabel('Perc Change(%)')
+    ax2.grid()
+    ax2.set_title("GHG Signal")
+    
+    return f
+
+
+def gen_pop_signal_ratios(variable: str, exp_num: str, min_max: str, time_begin: int, time_end: int):
+    land_mask = ar6.land.mask(xarray.open_dataset(f"{paths.DIR_PATH}/populations/weighted/ALL/{variable}-{exp_num}-{min_max}.nc"))
+
+    weighted_all = xarray.open_dataset(f"{paths.DIR_PATH}/populations/weighted/ALL/{variable}-{exp_num}-{min_max}.nc").where(land_mask > 0).days.mean(dim="lat").mean(dim="lon").sel(time=slice(time_begin, time_end))
+    weighted_xaer = xarray.open_dataset(f"{paths.DIR_PATH}/populations/weighted/XAER/{variable}-{exp_num}-{min_max}.nc").where(land_mask > 0).days.mean(dim="lat").mean(dim="lon").sel(time=slice(time_begin, time_end))
+    weighted_xghg = xarray.open_dataset(f"{paths.DIR_PATH}/populations/weighted/XGHG/{variable}-{exp_num}-{min_max}.nc").where(land_mask > 0).days.mean(dim="lat").mean(dim="lon").sel(time=slice(time_begin, time_end))
+    weighted_aer = (weighted_all - weighted_xaer) / weighted_xaer
+    weighted_ghg = (weighted_all - weighted_xghg) / weighted_xghg
+
+    if min_max == "tx":
+        all_member_paths = [path for path in tmax_paths()[0] if exp_num in path]
+        xghg_member_paths = [path for path in tmax_paths()[1] if exp_num in path]
+        xaer_member_paths = [path for path in tmax_paths()[2] if exp_num in path]
+    elif min_max == "tn":
+        all_member_paths = [path for path in tmin_paths()[0] if exp_num in path]
+        xghg_member_paths = [path for path in tmin_paths()[1] if exp_num in path]
+        xaer_member_paths = [path for path in tmin_paths()[2] if exp_num in path]
+    all_data = xarray.open_mfdataset(all_member_paths, concat_dim="member", combine="nested")[f"{variable}_{min_max}90"].dt.days.mean(dim="member")
+    xaer_data = xarray.open_mfdataset(xaer_member_paths, concat_dim="member", combine="nested")[f"{variable}_{min_max}90"].dt.days.mean(dim="member")
+    xghg_data = xarray.open_mfdataset(xghg_member_paths, concat_dim="member", combine="nested")[f"{variable}_{min_max}90"].dt.days.mean(dim="member")
+
+    # Shift data
+    unweighted_all = all_data.assign_coords(lon=(((all_data.lon + 180) % 360) - 180)).sortby('lon')
+    unweighted_xaer = xaer_data.assign_coords(lon=(((xaer_data.lon + 180) % 360) - 180)).sortby('lon')
+    unweighted_xghg = xghg_data.assign_coords(lon=(((xghg_data.lon + 180) % 360) - 180)).sortby('lon')
+    
+    unweighted_all = unweighted_all.where(land_mask > 0).days.mean(dim="lat").mean(dim="lon").sel(time=slice(time_begin, time_end))
+    unweighted_xaer = unweighted_xaer.where(land_mask > 0).days.mean(dim="lat").mean(dim="lon").sel(time=slice(time_begin, time_end))
+    unweighted_xghg = unweighted_xghg.where(land_mask > 0).days.mean(dim="lat").mean(dim="lon").sel(time=slice(time_begin, time_end))
+    unweighted_aer = (unweighted_all - unweighted_xaer) / unweighted_xaer
+    unweighted_ghg = (unweighted_all - unweighted_xghg) / unweighted_xghg
+
+    f, ax1 = plt.subplots(1, 1, figsize=(35, 10), facecolor='w')
+    f.suptitle(f"HWF Population Unweighted over Weighted (Signal Divided by XSignal) (Land Masked)", fontsize=30)
+    rc('font', **{'weight': 'bold', 'size': 22})
+
+    ((unweighted_aer / weighted_aer)*100).rename("Ratio (%)").plot(ax=ax1, color="blue", label="AER Pop. Unweighted/Weighted")
+    ((unweighted_ghg / weighted_ghg)*100).rename("Ratio (%)").plot(ax=ax1, color="green", label="GHG Pop. Unweighted/Weighted")
+    ax1.grid()
+    ax1.legend()
+    ax1.set_title(f"Ratios for AER vs GHG (Note: 1920-{time_begin} omitted due to large values skewing data) Land Masked")
+
+    f.tight_layout()
+    return f
 
 
 def gen_autocorrelation_maps():
@@ -655,7 +1217,7 @@ def gen_data_heatwave_statistics() -> None:
     all_mn, xghg_mn, xaer_mn = paths.trefhtmn_members()
     all_mx, xghg_mx, xaer_mx = paths.trefhtmx_members()
     threshold_path = paths.control_threshold()
-    exp_nums = ["3114", "3336" ,"3314", "3236", "3214", "1112", "1212", "1111"]#["3136", "1312"]#["3114", "3336" ,"3314", "3236", "3214", "3136", "1112", "1212", "1312", "1111"]
+    exp_nums = ["3114", "3336" ,"3314", "3236", "3214", "3136", "1112", "1212", "1312", "1111"]
     
     for num in exp_nums:
         for index, ds_mn in enumerate(all_mn):
@@ -667,7 +1229,7 @@ def gen_data_heatwave_statistics() -> None:
         for index, ds_mn in enumerate(xaer_mn):
             print(f"{num} XAER {index}")
             analysis.calculate_heatwave_statistics(f"{paths.DIR_PATH}/heat_output/XAER/1920_1950_control_base/XAER-{num}-{index}-", xaer_mx[index], ds_mn, threshold_path, num)
-            merra2_path = paths.merra2_download()
-        #analysis.calculate_heatwave_statistics(f"{paths.DIR_PATH}/MERRA2/heat_ouputs/MERRA2-{num}-", merra2_path, merra2_path, threshold_path, num, tmaxvname="T2MMAX", tminvname="T2MMIN", model="MERRA2")
+        merra2_path = paths.merra2_download()
+        analysis.calculate_heatwave_statistics(f"{paths.DIR_PATH}/MERRA2/heat_ouputs/MERRA2-{num}-", merra2_path, merra2_path, threshold_path, num, tmaxvname="T2MMAX", tminvname="T2MMIN", model="MERRA2")
         
         

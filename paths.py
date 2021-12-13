@@ -165,6 +165,41 @@ def heat_out_trefht_tmax_members_1920_1950_CONTROL() -> tuple:
     return all_ds, xghg_ds, xaer_ds
 
 
+## ===================================== POPULATION WEIGHTED =====================================
+
+
 def population_2020_aggregated() -> str:
     return DIR_PATH + "/populations/ppp_2020_1km_Aggregated.tif"
+
+
+def population_weighted_tmax_heat_outputs() -> tuple:
+    """Population-weighted datasets for maximum temperature heat outputs"""
+    all_ds = [DIR_PATH + "/population/weighted/ALL/" + name for name in listdir(DIR_PATH + "/population/weighted/ALL/") if "tx" in name]
+    xghg_ds = [DIR_PATH + "/population/weighted/XGHG/" + name for name in listdir(DIR_PATH + "/population/weighted/XGHG/") if "tx" in name]
+    xaer_ds = [DIR_PATH + "/population/weighted/XAER/" + name for name in listdir(DIR_PATH + "/population/weighted/XAER/") if "tx" in name]
+    return all_ds, xghg_ds, xaer_ds
+
+
+def population_weighted_tmin_heat_outputs() -> tuple:
+    """Population-weighted datasets for minimum temperature heat outputs"""
+    all_ds = [DIR_PATH + "/population/weighted/ALL/" + name for name in listdir(DIR_PATH + "/population/weighted/ALL/") if "tn" in name]
+    xghg_ds = [DIR_PATH + "/population/weighted/XGHG/" + name for name in listdir(DIR_PATH + "/population/weighted/XGHG/") if "tn" in name]
+    xaer_ds = [DIR_PATH + "/population/weighted/XAER/" + name for name in listdir(DIR_PATH + "/population/weighted/XAER/") if "tn" in name]
+    return all_ds, xghg_ds, xaer_ds
+
+
+def population_shifted_tmax_heat_outputs() -> tuple:
+    """Shifted datasets used to calculate population-weighted datasets for maximum temperature heat outputs"""
+    all_ds = [DIR_PATH + "/population/shifted/ALL/" + name for name in listdir(DIR_PATH + "/population/shifted/ALL/") if "tx" in name]
+    xghg_ds = [DIR_PATH + "/population/shifted/XGHG/" + name for name in listdir(DIR_PATH + "/population/shifted/XGHG/") if "tx" in name]
+    xaer_ds = [DIR_PATH + "/population/shifted/XAER/" + name for name in listdir(DIR_PATH + "/population/shifted/XAER/") if "tx" in name]
+    return all_ds, xghg_ds, xaer_ds
+
+
+def population_shifted_tmin_heat_outputs() -> tuple:
+    """Shifted datasets used to calculate population-weighted datasets for minimum temperature heat outputs"""
+    all_ds = [DIR_PATH + "/population/shifted/ALL/" + name for name in listdir(DIR_PATH + "/population/shifted/ALL/") if "tn" in name]
+    xghg_ds = [DIR_PATH + "/population/shifted/XGHG/" + name for name in listdir(DIR_PATH + "/population/shifted/XGHG/") if "tn" in name]
+    xaer_ds = [DIR_PATH + "/population/shifted/XAER/" + name for name in listdir(DIR_PATH + "/population/shifted/XAER/") if "tn" in name]
+    return all_ds, xghg_ds, xaer_ds
 
