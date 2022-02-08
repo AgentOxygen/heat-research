@@ -1,7 +1,12 @@
 ### Figures Compiled
 
-For [ ] HWF, [ ] HWD, and [ ] AHWD / AHWF
-[ ] Population Weighted and [ ] Unweighted
+- [ ] HWF
+- [ ] HWD
+- [ ] AHWD / AHWF
+- [ ] Population Weighted
+- [ ] Unweighted
+
+For each of the above
 - [ ] Temporal mean maps by decades
 - [ ] Global mean plots
   - [ ] Complete plot
