@@ -19,6 +19,96 @@ from matplotlib.backends.backend_pdf import PdfPages
 from paths import DIR_PATH, heat_out_trefht_tmax_members_1920_1950_CONTROL as tmax_paths, heat_out_trefht_tmin_members_1920_1950_CONTROL as tmin_paths
 
 
+def gen_weighted_v_unweighted():
+    variable="HWF"
+    exp_num="3136"
+
+    pop_size = 7.96949658e+09
+
+    max_weighted_all = (xarray.open_dataset(f"../data/populations/weighted/ALL/{variable}-3136-tx.nc").days / pop_size).sum(dim="lat").sum(dim="lon")
+    max_weighted_aer = max_weighted_all - (xarray.open_dataset(f"../data/populations/weighted/XAER/{variable}-3136-tx.nc").days / pop_size).sum(dim="lat").sum(dim="lon")
+    max_weighted_ghg = max_weighted_all - (xarray.open_dataset(f"../data/populations/weighted/XGHG/{variable}-3136-tx.nc").days / pop_size).sum(dim="lat").sum(dim="lon")
+
+
+    all_member_paths = [path for path in tmax_paths()[0] if exp_num in path]
+    xghg_member_paths = [path for path in tmax_paths()[1] if exp_num in path]
+    xaer_member_paths = [path for path in tmax_paths()[2] if exp_num in path]
+
+    tx_all_dataset = xarray.open_mfdataset(all_member_paths, concat_dim="member", combine="nested")[f"{variable}_tx90"]
+    tx_xaer_dataset = xarray.open_mfdataset(xaer_member_paths, concat_dim="member", combine="nested")[f"{variable}_tx90"]
+    tx_xghg_dataset = xarray.open_mfdataset(xghg_member_paths, concat_dim="member", combine="nested")[f"{variable}_tx90"]
+
+    land_mask = ar6.land.mask(tx_all_dataset.mean(dim="member"))
+
+    max_unweighted_all = tx_all_dataset.where(land_mask > 0).mean(dim="lat", skipna=True).mean(dim="lon").dt.days
+    max_unweighted_aer = max_unweighted_all - tx_xaer_dataset.where(land_mask > 0).mean(dim="lat").mean(dim="lon").dt.days
+    max_unweighted_ghg = max_unweighted_all - tx_xghg_dataset.where(land_mask > 0).mean(dim="lat").mean(dim="lon").dt.days
+
+
+    min_weighted_all = (xarray.open_dataset(f"../data/populations/weighted/ALL/{variable}-3136-tn.nc").days / pop_size).sum(dim="lat").sum(dim="lon")
+    min_weighted_aer = min_weighted_all - (xarray.open_dataset(f"../data/populations/weighted/XAER/{variable}-3136-tn.nc").days / pop_size).sum(dim="lat").sum(dim="lon")
+    min_weighted_ghg = min_weighted_all - (xarray.open_dataset(f"../data/populations/weighted/XGHG/{variable}-3136-tn.nc").days / pop_size).sum(dim="lat").sum(dim="lon")
+
+    all_member_paths = [path for path in tmin_paths()[0] if exp_num in path]
+    xghg_member_paths = [path for path in tmin_paths()[1] if exp_num in path]
+    xaer_member_paths = [path for path in tmin_paths()[2] if exp_num in path]
+
+    tn_all_dataset = xarray.open_mfdataset(all_member_paths, concat_dim="member", combine="nested")[f"{variable}_tn90"]
+    tn_xaer_dataset = xarray.open_mfdataset(xaer_member_paths, concat_dim="member", combine="nested")[f"{variable}_tn90"]
+    tn_xghg_dataset = xarray.open_mfdataset(xghg_member_paths, concat_dim="member", combine="nested")[f"{variable}_tn90"]
+
+    land_mask = ar6.land.mask(tn_all_dataset.mean(dim="member"))
+
+    min_unweighted_all = tn_all_dataset.where(land_mask > 0).mean(dim="lat", skipna=True).mean(dim="lon").dt.days
+    min_unweighted_aer = min_unweighted_all - tn_xaer_dataset.where(land_mask > 0).mean(dim="lat").mean(dim="lon").dt.days
+    min_unweighted_ghg = min_unweighted_all - tn_xghg_dataset.where(land_mask > 0).mean(dim="lat").mean(dim="lon").dt.days
+
+
+    f, (ax1, ax2) = plt.subplots(2, 1, figsize=(18, 15), facecolor='w')
+    f.suptitle(f"{variable} {exp_num} Simple Population-Weighted Isolated Signal Comparison(Land Masked)", fontsize=30)
+    rc('font', **{'weight': 'bold', 'size': 24})
+
+    #max_weighted_all.mean(dim="member").sel(time=slice(1920,2079)).plot(ax=ax1, color="darkgreen", label="Weighted ALL", linewidth=4)
+    max_weighted_aer.mean(dim="member").sel(time=slice(1920,2079)).plot(ax=ax1, color="darkblue", label="Weighted AER", linewidth=4)
+    max_weighted_ghg.mean(dim="member").sel(time=slice(1920,2079)).plot(ax=ax1, color="darkred", label="Weighted GHG", linewidth=4)
+    #ax1.fill_between(max_weighted_all.sel(time=slice(1920,2079)).time, max_weighted_all.min(dim="member").sel(time=slice(1920,2079)), max_weighted_all.max(dim="member").sel(time=slice(1920,2079)), color="darkgreen", alpha=0.35)
+    ax1.fill_between(max_weighted_aer.sel(time=slice(1920,2079)).time, max_weighted_aer.min(dim="member").sel(time=slice(1920,2079)), max_weighted_aer.max(dim="member").sel(time=slice(1920,2079)), color="darkblue", alpha=0.35)
+    ax1.fill_between(max_weighted_ghg.sel(time=slice(1920,2079)).time, max_weighted_ghg.min(dim="member").sel(time=slice(1920,2079)), max_weighted_ghg.max(dim="member").sel(time=slice(1920,2079)), color="darkred", alpha=0.35)
+
+    #max_unweighted_all.mean(dim="member").sel(time=slice(1920,2079)).plot(ax=ax1, color="lime", label="Unweighted ALL", linewidth=4)
+    max_unweighted_aer.mean(dim="member").sel(time=slice(1920,2079)).plot(ax=ax1, color="aqua", label="Unweighted AER", linewidth=4)
+    max_unweighted_ghg.mean(dim="member").sel(time=slice(1920,2079)).plot(ax=ax1, color="tomato", label="Unweighted GHG", linewidth=4)
+    #ax1.fill_between(max_unweighted_all.sel(time=slice(1920,2079)).time, max_unweighted_all.min(dim="member").sel(time=slice(1920,2079)), max_weighted_all.max(dim="member").sel(time=slice(1920,2079)), color="lime", alpha=0.35)
+    ax1.fill_between(max_unweighted_aer.sel(time=slice(1920,2079)).time, max_unweighted_aer.min(dim="member").sel(time=slice(1920,2079)), max_weighted_aer.max(dim="member").sel(time=slice(1920,2079)), color="aqua", alpha=0.35)
+    ax1.fill_between(max_unweighted_ghg.sel(time=slice(1920,2079)).time, max_unweighted_ghg.min(dim="member").sel(time=slice(1920,2079)), max_weighted_ghg.max(dim="member").sel(time=slice(1920,2079)), color="tomato", alpha=0.35)
+
+    ax1.grid()
+    ax1.legend()
+    ax1.set_title("Using Max. Temperature")
+
+    #min_weighted_all.mean(dim="member").sel(time=slice(1920,2079)).plot(ax=ax2, color="darkgreen", label="Weighted ALL", linewidth=4)
+    min_weighted_aer.mean(dim="member").sel(time=slice(1920,2079)).plot(ax=ax2, color="darkblue", label="Weighted AER", linewidth=4)
+    min_weighted_ghg.mean(dim="member").sel(time=slice(1920,2079)).plot(ax=ax2, color="darkred", label="Weighted GHG", linewidth=4)
+    #ax2.fill_between(min_weighted_all.sel(time=slice(1920,2079)).time, min_weighted_all.min(dim="member").sel(time=slice(1920,2079)), min_weighted_all.max(dim="member").sel(time=slice(1920,2079)), color="green", alpha=0.35)
+    ax2.fill_between(min_weighted_aer.sel(time=slice(1920,2079)).time, min_weighted_aer.min(dim="member").sel(time=slice(1920,2079)), min_weighted_aer.max(dim="member").sel(time=slice(1920,2079)), color="blue", alpha=0.35)
+    ax2.fill_between(min_weighted_ghg.sel(time=slice(1920,2079)).time, min_weighted_ghg.min(dim="member").sel(time=slice(1920,2079)), min_weighted_ghg.max(dim="member").sel(time=slice(1920,2079)), color="red", alpha=0.35)
+
+    #max_unweighted_all.mean(dim="member").sel(time=slice(1920,2079)).plot(ax=ax2, color="lime", label="Unweighted ALL", linewidth=4)
+    max_unweighted_aer.mean(dim="member").sel(time=slice(1920,2079)).plot(ax=ax2, color="aqua", label="Unweighted AER", linewidth=4)
+    max_unweighted_ghg.mean(dim="member").sel(time=slice(1920,2079)).plot(ax=ax2, color="tomato", label="Unweighted GHG", linewidth=4)
+    #ax2.fill_between(max_unweighted_all.sel(time=slice(1920,2079)).time, max_unweighted_all.min(dim="member").sel(time=slice(1920,2079)), max_weighted_all.max(dim="member").sel(time=slice(1920,2079)), color="lime", alpha=0.35)
+    ax2.fill_between(max_unweighted_aer.sel(time=slice(1920,2079)).time, max_unweighted_aer.min(dim="member").sel(time=slice(1920,2079)), max_weighted_aer.max(dim="member").sel(time=slice(1920,2079)), color="aqua", alpha=0.35)
+    ax2.fill_between(max_unweighted_ghg.sel(time=slice(1920,2079)).time, max_unweighted_ghg.min(dim="member").sel(time=slice(1920,2079)), max_weighted_ghg.max(dim="member").sel(time=slice(1920,2079)), color="tomato", alpha=0.35)
+
+
+    ax2.grid()
+    ax2.legend()
+    ax2.set_title("Using Min. Temperature")
+
+    f.tight_layout()
+    return f
+
+
 def gen_isolated_signal_ratio(exp_num: str, variable_num: str, variable_den: str):
     
     all_member_paths = [path for path in tmax_paths()[0] if exp_num in path]
