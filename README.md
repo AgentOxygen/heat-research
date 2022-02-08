@@ -5,6 +5,7 @@
 - [ ] AHWD / AHWF
 - [ ] Population Weighted
 - [ ] Unweighted
+- [ ] Temperature plots
 
 For each of the above
 - [ ] Temporal mean maps by decades
