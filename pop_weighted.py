@@ -1,5 +1,4 @@
 import xarray
-import xesmf as xe
 import numpy as np
 from paths import heat_out_trefht_tmax_members_1920_1950_CONTROL as tmax_paths
 from paths import heat_out_trefht_tmin_members_1920_1950_CONTROL as tmin_paths

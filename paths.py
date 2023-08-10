@@ -1,7 +1,7 @@
 from os import listdir
 
 # Path to head of data directory
-DIR_PATH = "/projects/dgs/persad_research/heat_research/data/"
+DIR_PATH = "/projects/dgs/persad_research/heat_research/old_data/"
 
 ## ===================================== TREFHT/MN/MX DATA =====================================
 
@@ -78,6 +78,11 @@ def merra2_download() -> str:
     return DIR_PATH + "MERRA2/downloads/MERRA2_1980-2015.nc"
 
 
+def merra2_land_download() -> str:
+    """Path to MERRA2 land dataset"""
+    return DIR_PATH + "MERRA2/downloads/MERRA2_100.const_2d_lnd_Nx.00000000.nc4"
+
+
 def heat_out_merra2() -> list:
     """Heat outputs for MERRA2 data"""
     return [DIR_PATH + "MERRA2/heat_outputs/" + name for name in listdir(DIR_PATH + "MERRA2/heat_outputs/")]
@@ -86,7 +91,7 @@ def heat_out_merra2() -> list:
 
 
 def control_threshold() -> str:
-    """Path to pre-industrial contro threshold netCDF"""
+    """Path to pre-industrial control threshold netCDF"""
     return DIR_PATH + "thresholds/CONTROL/control_threshold.nc"
 
 
@@ -150,7 +155,7 @@ def heat_out_trefht_tmax_averages_1920_1950_ALL() -> tuple:
 
 
 def heat_out_trefht_tmin_members_1920_1950_CONTROL() -> tuple:
-    """Minimum temperature heat outputs for each ensemble member with 1920 to 1950 baseline"""
+    """Minimum temperature heat outputs for each ensemble member with 1920 to 1950 control baseline"""
     all_ds = [DIR_PATH + "/heat_output/ALL/1920_1950_control_base/" + name for name in listdir(DIR_PATH + "/heat_output/ALL/1920_1950_control_base/") if "tn" in name]
     xghg_ds = [DIR_PATH + "/heat_output/XGHG/1920_1950_control_base/" + name for name in listdir(DIR_PATH + "/heat_output/XGHG/1920_1950_control_base/") if "tn" in name]
     xaer_ds = [DIR_PATH + "/heat_output/XAER/1920_1950_control_base/" + name for name in listdir(DIR_PATH + "/heat_output/XAER/1920_1950_control_base/") if "tn" in name]
@@ -158,18 +163,24 @@ def heat_out_trefht_tmin_members_1920_1950_CONTROL() -> tuple:
 
 
 def heat_out_trefht_tmax_members_1920_1950_CONTROL() -> tuple:
-    """Maximum temperature heat outputs for each ensemble member with 1920 to 1950 ALL baseline"""
+    """Maximum temperature heat outputs for each ensemble member with 1920 to 1950 control baseline"""
     all_ds = [DIR_PATH + "/heat_output/ALL/1920_1950_control_base/" + name for name in listdir(DIR_PATH + "/heat_output/ALL/1920_1950_control_base/") if "tx" in name]
     xghg_ds = [DIR_PATH + "/heat_output/XGHG/1920_1950_control_base/" + name for name in listdir(DIR_PATH + "/heat_output/XGHG/1920_1950_control_base/") if "tx" in name]
     xaer_ds = [DIR_PATH + "/heat_output/XAER/1920_1950_control_base/" + name for name in listdir(DIR_PATH + "/heat_output/XAER/1920_1950_control_base/") if "tx" in name]
     return all_ds, xghg_ds, xaer_ds
 
 
+def heat_out_CONTROL_SELF() -> tuple:
+    """Minimum and Maximum temperature heat outputs run on 1850 CONTROL using 1850 CONTROL threshold"""
+    min_ds = [DIR_PATH + "/heat_output/CONTROL_SELF/" + name for name in listdir(DIR_PATH + "/heat_output/CONTROL_SELF/") if "tn" in name]
+    max_ds = [DIR_PATH + "/heat_output/CONTROL_SELF/" + name for name in listdir(DIR_PATH + "/heat_output/CONTROL_SELF/") if "tx" in name]
+    return  min_ds, max_ds
+
 ## ===================================== POPULATION WEIGHTED =====================================
 
 
 def population_2020_aggregated() -> str:
-    return DIR_PATH + "/populations/ppp_2020_1km_Aggregated.tif"
+    return DIR_PATH + "/population/ppp_2020_1km_Aggregated.tif"
 
 
 def population_weighted_tmax_heat_outputs() -> tuple:
@@ -203,3 +214,32 @@ def population_shifted_tmin_heat_outputs() -> tuple:
     xaer_ds = [DIR_PATH + "/population/shifted/XAER/" + name for name in listdir(DIR_PATH + "/population/shifted/XAER/") if "tn" in name]
     return all_ds, xghg_ds, xaer_ds
 
+
+## ===================================== POPULATION WEIGHTED =====================================
+
+def land_mask() -> str:
+    return DIR_PATH + "/land_mask.nc"
+
+
+## ===================================== AEROSOL OPTICAL DEPTH =====================================
+
+def aod_vis_all_download() -> tuple:
+    hist = [DIR_PATH + "/AODVIS/ALL/download/" + name for name in listdir(DIR_PATH + "/AODVIS/ALL/download/") if "2005" in name]
+    future = [DIR_PATH + "/AODVIS/ALL/download/" + name for name in listdir(DIR_PATH + "/AODVIS/ALL/download/") if "2006" in name]
+    return hist, future
+
+
+def aod_vis_xaer_download() -> tuple:
+    hist = [DIR_PATH + "/AODVIS/XAER/download/" + name for name in listdir(DIR_PATH + "/AODVIS/XAER/download/") if "2005" in name]
+    future = [DIR_PATH + "/AODVIS/XAER/download/" + name for name in listdir(DIR_PATH + "/AODVIS/XAER/download/") if "2006" in name]
+    return hist, future
+
+
+def aod_vis_all_concatenated() -> list:
+    members = [DIR_PATH + "/AODVIS/ALL/concatenated/" + name for name in listdir(DIR_PATH + "/AODVIS/ALL/concatenated/")]
+    return members
+
+
+def aod_vis_xaer_concatenated() -> list:
+    members = [DIR_PATH + "/AODVIS/XAER/concatenated/" + name for name in listdir(DIR_PATH + "/AODVIS/XAER/concatenated/")]
+    return members

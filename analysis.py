@@ -5,7 +5,6 @@ import datetime as dt
 import xarray
 import math
 from uuid import uuid4
-import netcdftime
 from multiprocessing import Process, Queue
 from os.path import isdir
 from os import listdir, remove, mkdir
@@ -35,6 +34,55 @@ def autocorrelation(o_data: xarray.DataArray) -> xarray.DataArray:
     correlation_data = o_data.mean(dim="time").rename("Autocorrelation")
     correlation_data.values = correlation
     return correlation_data
+
+# deprecated
+def t_test_mask(all_ds, xaer_ds, modified=False):
+    """
+    Calculates t-value for each lat, lon value between ALL and XAER with (member, time, lat, lon) formatting
+    ALL and XAER can be switched for any similarly formatted datasets
+    Returns mask with t-values for each grid point
+    
+    Modified dictates whether or not to use Sarah Schlunegger’s modified t-test or the standard Welch's unpaired t-test
+    """
+    def modified_t_test(all_pt, xaer_pt, lat, lon):
+        std_error = math.sqrt((all_pt.std()**2 / all_pt.size) + (xaer_pt.std()**2 / xaer_pt.size))
+        if std_error != 0:
+            t_val = (all_pt.mean() - xaer_pt.mean()) / std_error
+        else:
+            t_val = np.nan
+        return ((lat, lon), std_error)
+
+    #print("Converting to numpy array...")
+    # (member, time, lat, lon)
+    all_array = all_ds.values
+    xaer_array = xaer_ds.values
+    #print("Done.")
+    
+    results = []
+    #print(f"Preforming test, modified={modified}")
+    for lati, lat in enumerate(all_ds.lat.values):
+        for loni, lon in enumerate(all_ds.lon.values):
+            all_pt = all_array[0:all_ds["member"].size, 0:all_ds["time"].size, lati, loni].flatten()
+            xaer_pt = xaer_array[0:xaer_ds["member"].size, 0:xaer_ds["time"].size, lati, loni].flatten()
+            if modified:
+                results.append(modified_t_test(all_pt, xaer_pt, lat, lon))
+            else:
+                results.append(welch_t_test(all_pt, xaer_pt, lat, lon))
+    #print("Done.")
+    
+    if len(results) == all_ds.lat.size*all_ds.lon.size:
+        #print("Shapes match, converting back to xarray...")
+        pass
+    else:
+        raise RuntimeError(f'The mask size does not match the original dataset size: {len(mask)} != {all_ds.lat.size*all_ds.lon.size}')
+    
+    # Recycle ALL array
+    return_array = (all_ds.mean(dim="member").mean(dim="time").load() * 0).rename("t-value")
+    for index, ((lat, lon), value) in enumerate(results):
+        return_array.loc[dict(lat=lat, lon=lon)] = value
+    
+    #print("Done.")
+    return return_array
 
 
 def bilinear_interpolation(data_to_interpolate: xarray.DataArray, data_to_match: xarray.DataArray) -> xarray.DataArray:
